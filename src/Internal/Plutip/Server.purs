@@ -247,7 +247,7 @@ startPlutipContractEnv
        }
 startPlutipContractEnv plutipCfg distr cleanupRef = do
   configCheck plutipCfg
-  void $ startPlutipServer plutipCfg
+  -- void $ startPlutipServer plutipCfg
   ourKey /\ response <- startPlutipCluster'
   startOgmios' response
   startKupo' response
@@ -274,11 +274,11 @@ startPlutipContractEnv plutipCfg distr cleanupRef = do
       (\res -> liftEffect $ Ref.modify_ ([ after res ] <> _) cleanupRef)
       action
 
-  startPlutipServer' :: Aff Unit
-  startPlutipServer' =
-    bracket (startPlutipServer plutipCfg)
-      (stopChildProcessWithPort plutipCfg.port)
-      (const $ checkPlutipServer plutipCfg)
+  -- startPlutipServer' :: Aff Unit
+  -- startPlutipServer' =
+  --   bracket (startPlutipServer plutipCfg)
+  --     (stopChildProcessWithPort plutipCfg.port)
+  --     (const $ checkPlutipServer plutipCfg)
 
   startPlutipCluster'
     :: Aff (PrivatePaymentKey /\ ClusterStartupParameters)
