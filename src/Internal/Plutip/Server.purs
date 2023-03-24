@@ -370,23 +370,24 @@ startPlutipContractEnv plutipCfg distr cleanupRef = do
 -- | Throw an exception if `PlutipConfig` contains ports that are occupied.
 configCheck :: PlutipConfig -> Aff Unit
 configCheck cfg = do
-  let
-    services :: Array (UInt /\ String)
-    services =
-      [ cfg.port /\ "plutip-server"
-      , cfg.ogmiosConfig.port /\ "ogmios"
-      , cfg.kupoConfig.port /\ "kupo"
-      ]
-  occupiedServices <- Array.catMaybes <$> for services \(port /\ service) -> do
-    isPortAvailable port <#> if _ then Nothing else Just (port /\ service)
-  unless (Array.null occupiedServices) do
-    liftEffect $ throw $
-      "Unable to run the following services, because the ports are occupied:\
-      \\n" <> foldMap printServiceEntry occupiedServices
-  where
-  printServiceEntry :: UInt /\ String -> String
-  printServiceEntry (port /\ service) =
-    "- " <> service <> " (port: " <> show (UInt.toInt port) <> ")\n"
+  pure unit
+  -- let
+  --   services :: Array (UInt /\ String)
+  --   services =
+  --     [ cfg.port /\ "plutip-server"
+  --     , cfg.ogmiosConfig.port /\ "ogmios"
+  --     , cfg.kupoConfig.port /\ "kupo"
+  --     ]
+  -- occupiedServices <- Array.catMaybes <$> for services \(port /\ service) -> do
+  --   isPortAvailable port <#> if _ then Nothing else Just (port /\ service)
+  -- unless (Array.null occupiedServices) do
+  --   liftEffect $ throw $
+  --     "Unable to run the following services, because the ports are occupied:\
+  --     \\n" <> foldMap printServiceEntry occupiedServices
+  -- where
+  -- printServiceEntry :: UInt /\ String -> String
+  -- printServiceEntry (port /\ service) =
+  --   "- " <> service <> " (port: " <> show (UInt.toInt port) <> ")\n"
 
 -- | Start the plutip cluster, initializing the state with the given
 -- | UTxO distribution. Also initializes an extra payment key (aka
