@@ -108,7 +108,7 @@ import Effect.Ref as Ref
 import Mote (bracket) as Mote
 import Mote.Description (Description(Group, Test))
 import Mote.Monad (MoteT(MoteT), mapTest)
-import Node.ChildProcess (defaultSpawnOptions)
+import Node.ChildProcess (defaultSpawnOptions, inherit)
 import Node.FS.Sync (exists, mkdir) as FSSync
 import Node.Path (FilePath, dirname)
 import Type.Prelude (Proxy(Proxy))
@@ -541,8 +541,8 @@ startKupo cfg params = do
 
 startPlutipServer :: PlutipConfig -> Aff ManagedProcess
 startPlutipServer cfg = do
-  spawn "plutip-server" [ "-p", UInt.toString cfg.port ]
-    defaultSpawnOptions
+  spawn "plutip-server1" [ "-p", UInt.toString cfg.port ]
+    (defaultSpawnOptions { stdio = inherit })
     Nothing
 
 checkPlutipServer :: PlutipConfig -> Aff Unit
