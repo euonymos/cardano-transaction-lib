@@ -247,7 +247,7 @@ startPlutipContractEnv
        }
 startPlutipContractEnv plutipCfg distr cleanupRef = do
   configCheck plutipCfg
-  startPlutipServer'
+  void $ startPlutipServer plutipCfg
   ourKey /\ response <- startPlutipCluster'
   startOgmios' response
   startKupo' response
