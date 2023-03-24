@@ -541,7 +541,7 @@ startKupo cfg params = do
 
 startPlutipServer :: PlutipConfig -> Aff ManagedProcess
 startPlutipServer cfg = do
-  spawn "plutip-server1" [ "-p", UInt.toString cfg.port ]
+  spawn "plutip-server" [ "-p", UInt.toString cfg.port ]
     (defaultSpawnOptions { stdio = inherit })
     Nothing
 
