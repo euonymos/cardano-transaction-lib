@@ -41,6 +41,10 @@
     # https://github.com/IntersectMBO/cardano-node/pull/5960
     cardano-node.url = "github:input-output-hk/cardano-node/d7abccd4e90c38ff5cd4d6a7839689d888332056";
 
+    # CLB emulator
+    # clb.url = "github:mlabs-haskell/clb/9dcbaec98efaef6bd4c8f46c329660fa436c1839";
+    clb.url = "/home/euonymos/src/mlabs/clb";
+
     # Repository with network parameters
     # NOTE(bladyjoker): Cardano configurations (yaml/json) often change format and break, that's why we pin to a specific known version.
     cardano-configurations = {
@@ -51,7 +55,7 @@
 
     # Get Ogmios and Kupo from cardano-nix
     cardano-nix = {
-      url = "github:mlabs-haskell/cardano.nix";
+      url = "/home/euonymos/src/mlabs/cardano.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -78,6 +82,7 @@
     , nixpkgs-arion
     , cardano-configurations
     , cardano-node
+    , clb
     , ...
     }@inputs:
     let
@@ -85,7 +90,7 @@
       darwinSystems = [ "x86_64-darwin" "aarch64-darwin" ];
       supportedSystems = linuxSystems ++ darwinSystems;
 
-      ogmiosVersion = "6.5.0";
+      ogmiosVersion = "6.8.0";
       kupoVersion = "2.9.0";
 
       perSystem = nixpkgs.lib.genAttrs supportedSystems;
@@ -288,6 +293,7 @@
                 cardano-testnet = cardano-node.packages.${system}.cardano-testnet;
                 cardano-node = cardano-node.packages.${system}.cardano-node;
                 cardano-cli = cardano-node.packages.${system}.cardano-cli;
+                clb = clb.packages.${system}."socket-emulator:exe:cardano-node-socket-emulator";
                 kupo = cardano-nix.packages.${system}."kupo-${kupoVersion}";
                 cardano-db-sync = inputs.db-sync.packages.${system}.cardano-db-sync;
                 blockfrost-backend-ryo = inputs.blockfrost.packages.${system}.blockfrost-backend-ryo;

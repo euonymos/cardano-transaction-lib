@@ -136,11 +136,13 @@ let
                   pkgs.cardano-testnet
                   pkgs.cardano-node
                   pkgs.cardano-cli
+                  pkgs.clb
                 ]
               )
             )
           ];
         shellHook = ''
+          export CARDANO_NODE=${pkgs.clb}/bin/cardano-node-socket-emulator
           export NODE_PATH="${nodeModules}/lib/node_modules"
           ln -sfn $NODE_PATH node_modules
           export PATH="${nodeModules}/bin:$PATH"
