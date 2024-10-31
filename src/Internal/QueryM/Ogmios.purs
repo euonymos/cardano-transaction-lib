@@ -531,8 +531,8 @@ instance DecodeAeson OgmiosEraSummaries where
       end'' <- getFieldOptional o "end"
       end <- case end'' of
         Nothing -> pure Nothing
-        Just end' -> if isNull end'
-          then pure Nothing
+        Just end' ->
+          if isNull end' then pure Nothing
           else Just <$> decodeEraSummaryTime end'
       parameters <- decodeEraSummaryParameters =<< getField o "parameters"
       pure $ wrap { start, end, parameters }

@@ -83,6 +83,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## Unreleased version
+
+- [CLB emulator](https://github.com/mlabs-haskell/clb) added so you can use it instead of
+`cardano-node` within `cardano-testnet` in test cases whern emulator's features are enough.
+- TODO: implement bt-ref example
+- TODO: add a flag to choose between cardano-node and clb
+- TODO: Fix red testnet tests:
+  * Get ChainTip
+  * wait for slot far in the future
+  * Getting transaction metadata
+  * Query for current time and era summaries
+  * acquireMempoolSnapshot
+  * fetchMempoolTXs
+  * mempoolSnapshotSizeAndCapacity
+
+
 ## [v9.3.1]
 
 ### Fixed
