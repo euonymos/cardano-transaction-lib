@@ -112,9 +112,16 @@ withTestnetContractEnv
   -> Aff a
 withTestnetContractEnv cfg distr cont = do
   cleanupRef <- liftEffect $ Ref.new mempty
+  cleanupRefEmpty <- liftEffect $ Ref.new mempty
   Aff.bracket
     (try $ startTestnetContractEnv cfg distr cleanupRef)
-    (const $ runCleanup cleanupRef)
+    ( let
+        cleanupRef' =
+          if cfg.preserveTmpFolder then cleanupRefEmpty
+          else cleanupRef
+      in
+        const $ runCleanup cleanupRef'
+    )
     $ liftEither
     >=> \{ env, wallets, printLogs } ->
       whenError printLogs (cont env wallets)

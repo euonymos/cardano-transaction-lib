@@ -2020,10 +2020,11 @@
         "pre-commit-hooks": "pre-commit-hooks"
       },
       "locked": {
-        "dirtyRev": "8bbc254f87bfa464bd7ed08ebbf87c5c81ee92c8-dirty",
-        "dirtyShortRev": "8bbc254-dirty",
-        "lastModified": 1730316899,
-        "narHash": "sha256-/BObIE5YnSDXA9G5Uk/lEVNWYHXAGO/ODaoIhHOjICg=",
+        "lastModified": 1730829972,
+        "narHash": "sha256-YfDBCeR0gMbDaOAT9i+DcA/DFqXiTmVTR4y1rex2ihw=",
+        "ref": "refs/heads/>euonymos/mimic-node-cli",
+        "rev": "ae6af923093ad2db08af4376e38e44f55e8526d4",
+        "revCount": 139,
         "type": "git",
         "url": "file:///home/euonymos/src/mlabs/clb"
       },

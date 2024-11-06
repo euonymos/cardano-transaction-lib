@@ -68,4 +68,5 @@ defaultTestnetConfig =
       , slotLength: Seconds 0.1
       , epochSize: Nothing
       }
+  , preserveTmpFolder: true
   }
