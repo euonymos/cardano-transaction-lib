@@ -1,17 +1,10 @@
-module Test.Testnet.BetRef.Operations where
+module Test.Ctl.Testnet.BetRef.Operations where
 
 import Contract.Prelude
 import Prelude
 
 import Cardano.FromData (fromData)
--- import Cardano.Types.TransactionOutput (TransactionOutput(TransactionOutput))
 import Cardano.Plutus.Types.Value as Value
--- import Cardano.Transaction.Builder
---   ( OutputWitness(PlutusScriptOutput)
---   , RefInputAction(ReferenceInput)
---   , ScriptWitness(ScriptReference)
---   , TransactionBuilderStep(Pay, SpendOutput)
---   )
 import Cardano.Types
   ( Credential(ScriptHashCredential)
   , OutputDatum(OutputDatum)
@@ -22,6 +15,7 @@ import Cardano.Types
 import Cardano.Types.Address (getPaymentCredential)
 import Cardano.Types.Credential (asPubKeyHash)
 import Cardano.Types.OutputDatum (outputDatumDatum)
+import Cardano.Types.PlutusScript (PlutusScript, hash)
 import Cardano.Types.RedeemerDatum (RedeemerDatum(RedeemerDatum))
 import Cardano.Types.TransactionUnspentOutput
   ( TransactionUnspentOutput(TransactionUnspentOutput)
@@ -32,7 +26,6 @@ import Contract.Monad (Contract)
 import Contract.PlutusData (toData)
 import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups (validator)
-import Contract.Scripts (Validator, validatorHash)
 import Contract.Time (POSIXTimeRange)
 import Contract.Transaction
   ( TransactionInput
@@ -61,7 +54,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe)
 import Data.Unit (Unit, unit)
 import Effect.Exception (error)
-import Test.Testnet.BetRef.Types
+import Test.Ctl.Testnet.BetRef.Types
   ( BetRefAction(Bet)
   , BetRefDatum(BetRefDatum)
   , BetRefParams
@@ -74,47 +67,33 @@ import Test.Testnet.BetRef.Types
 
 -- | Operation to place bet.
 placeBet
-  ::
-     -- | Reference Script output.
-     TransactionInput
-  ->
-  -- | Script
-  Validator
-  ->
-  -- | Validator Params.
-  BetRefParams
-  ->
-  -- | Guess.
-  OracleAnswerDatum
-  ->
-  -- | Bet amount to place.
-  Value
-  ->
-  -- | Own address.
-  Address
-  ->
-  -- | Reference to previous bets UTxO (if any).
-  Maybe TransactionInput
+  :: TransactionInput
+  -- ^ Reference Script output.
+  -> PlutusScript
+  -- ^ Script
+  -> BetRefParams
+  -- ^ Betting parameters.
+  -> OracleAnswerDatum
+  -- ^ Bet's guess.
+  -> Value
+  -- ^ Bet amount to place.
+  -> PaymentPubKeyHash
+  -- ^ Bettor's PKH.
+  -> Maybe TransactionInput
+  -- ^ Reference to previous bets UTxO (if any).
   -> Contract Transaction
-placeBet refScript script brp guess bet ownAddr mPreviousBetsUtxoRef = do
-  logDebug' $ "ownAddr: " <> show ownAddr
+placeBet refScript script brp guess bet bettorPkh mPreviousBetsUtxoRef = do
+  logDebug' $ "bettorPkh: " <> show bettorPkh
   logDebug' $ "refOut: " <> show mPreviousBetsUtxoRef
 
-  pkh <- liftMaybe (error "Error decoding includeDatum")
-    (getPaymentCredential ownAddr >>= unwrap >>> asPubKeyHash >>= wrap >>> pure)
-
-  let vhash = validatorHash script
-
-  -- betAddr <- mkAddress
-  --   (PaymentCredential $ ScriptHashCredential vhash)
-  --   Nothing
+  let vhash = hash script
 
   case mPreviousBetsUtxoRef of
     -- This is the first bet.
     Nothing -> do
       let
         datum = toData $ BetRefDatum
-          { brdBets: singleton (pkh /\ guess)
+          { brdBets: singleton (bettorPkh /\ guess)
           , brdPreviousBet: Value.fromCardano bet
           }
 
@@ -152,7 +131,7 @@ placeBet refScript script brp guess bet ownAddr mPreviousBetsUtxoRef = do
           (unwrap brp).brpBetUntil
       let
         datum = toData $ BetRefDatum
-          { brdBets: singleton (pkh /\ guess) <> (unwrap dat).brdBets
+          { brdBets: singleton (bettorPkh /\ guess) <> (unwrap dat).brdBets
           , brdPreviousBet: Value.fromCardano bet
           }
       newValue <- liftMaybe (error "Value calculation error") $ bet `add`
@@ -176,7 +155,7 @@ placeBet refScript script brp guess bet ownAddr mPreviousBetsUtxoRef = do
               (RefInput refScriptTUO)
           , mustPayToScript vhash datum DatumInline newValue
           , mustValidateIn txValidRange
-          , mustBeSignedBy pkh
+          , mustBeSignedBy bettorPkh
           ]
 
         lookups :: ScriptLookups

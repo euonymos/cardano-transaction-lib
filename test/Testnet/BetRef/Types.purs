@@ -1,4 +1,4 @@
-module Test.Testnet.BetRef.Types where
+module Test.Ctl.Testnet.BetRef.Types where
 
 import Contract.Prelude
 import Prelude
@@ -18,6 +18,8 @@ import Cardano.Plutus.DataSchema
   )
 import Cardano.Plutus.Types.Value as Plutus
 import Cardano.Types (PaymentPubKeyHash)
+import Cardano.Types.BigNum (fromBigInt)
+import Contract.Monad (Contract)
 import Contract.Numeric.BigNum as BigNum
 import Contract.PlutusData
   ( class FromData
@@ -26,12 +28,19 @@ import Contract.PlutusData
   , genericFromData
   , genericToData
   )
+import Contract.Time
+  ( getEraSummaries
+  , getSystemStart
+  , slotToPosixTime
+  )
+import Contract.Value (Value)
+import Control.Monad.Error.Class (liftEither, liftMaybe)
 import Ctl.Internal.Types.Interval (POSIXTime)
--- import Contract.Value (Value)
--- import Contract.PlutusData (PlutusData(Integer))
+import Data.Bifunctor (lmap)
 import Data.List (List)
+-- import JS.BigInt as BigInt
+import Effect.Exception (error)
 import JS.BigInt (BigInt)
-import JS.BigInt as BigInt
 
 -- | Goals made my the concerned team.
 type TeamGoals = BigInt
@@ -93,6 +102,32 @@ instance ToData BetRefParams where
 
 instance Show BetRefParams where
   show = genericShow
+
+mkParams
+  :: PaymentPubKeyHash
+  -> BigInt
+  -> BigInt
+  -> Value
+  -- ^ Bet step valueContract BetRefParams
+  -> Contract BetRefParams
+mkParams oraclePkh betUntil betReveal betStep = do
+  eraSummaries <- getEraSummaries
+  systemStart <- getSystemStart
+  let slotToPosixTime' = slotToPosixTime eraSummaries systemStart
+  betUntil' <- liftMaybe (error "fromBigInt failure") $ wrap <$> fromBigInt
+    betUntil
+  betReveal' <- liftMaybe (error "fromBigInt failure") $ wrap <$> fromBigInt
+    betReveal
+  betUntilTime <- liftEither $ lmap (error <<< show)
+    $ slotToPosixTime' betUntil'
+  betRevealTime <- liftEither $ lmap (error <<< show)
+    $ slotToPosixTime' betReveal'
+  pure $ BetRefParams
+    { brpOraclePkh: oraclePkh
+    , brpBetUntil: betUntilTime
+    , brpBetReveal: betRevealTime
+    , brpBetStep: Plutus.fromCardano betStep
+    }
 
 -- | List of guesses by users along with the maximum bet placed yet. A new guess gets /prepended/ to this list. Note that since we are always meant to increment previously placed bet with `brpBetStep`, the newly placed bet would necessarily be maximum (it would be foolish to initialize `brpBetStep` with some negative amounts).
 newtype BetRefDatum = BetRefDatum
