@@ -25,7 +25,7 @@ import Contract.Log (logDebug')
 import Contract.Monad (Contract)
 import Contract.PlutusData (toData)
 import Contract.ScriptLookups (ScriptLookups)
-import Contract.ScriptLookups (validator)
+import Contract.ScriptLookups (unspentOutputs, validator)
 import Contract.Time (POSIXTimeRange)
 import Contract.Transaction
   ( TransactionInput
@@ -45,10 +45,10 @@ import Contract.TxConstraints
   , mustValidateIn
   )
 import Contract.UnbalancedTx (mkUnbalancedTx)
-import Contract.Utxos (getUtxo)
+import Contract.Utxos (getUtxo, utxosAt)
 import Contract.Value (Value, add)
 import Control.Monad.Error.Class (liftMaybe)
-import Ctl.Internal.Types.Interval (from) as Interval
+import Ctl.Internal.Types.Interval as Interval
 import Data.List (List, singleton)
 import Data.Map as Map
 import Data.Maybe (Maybe)
@@ -127,7 +127,7 @@ placeBet refScript script brp guess bet bettorPkh mPreviousBetsUtxoRef = do
       --     betUntilSlot <- enclosingSlotFromTime' (timeFromPlutus $ brpBetUntil brp)
       --     gyLogDebug' "" $ printf "3. bet until slot %s" (show betUntilSlot)
       let
-        (txValidRange :: POSIXTimeRange) = Interval.from $
+        (txValidRange :: POSIXTimeRange) = Interval.to $
           (unwrap brp).brpBetUntil
       let
         datum = toData $ BetRefDatum
@@ -140,6 +140,8 @@ placeBet refScript script brp guess bet bettorPkh mPreviousBetsUtxoRef = do
 
       refScriptUtxo <- liftMaybe (error "cannot find ref script utxo")
         =<< getUtxo refScript
+
+      -- utxo <- utxosAt =<< mkAddress (wrap $ ScriptHashCredential vhash) Nothing
 
       let
         refScriptTUO =
@@ -158,13 +160,17 @@ placeBet refScript script brp guess bet bettorPkh mPreviousBetsUtxoRef = do
           , mustBeSignedBy bettorPkh
           ]
 
+        utxo = Map.singleton previousBetsUtxoRef previousUtxo
+          `Map.union` Map.singleton refScript refScriptUtxo
+
         lookups :: ScriptLookups
         lookups = mconcat
           [ validator script
+          , unspentOutputs utxo
           ]
 
       unbalancedTx /\ _utxoMap <- mkUnbalancedTx lookups constraints
-      balancedTx <- balanceTx unbalancedTx Map.empty mempty
+      balancedTx <- balanceTx unbalancedTx utxo mempty
       pure balancedTx
 
 -- -- | Operation to take UTxO corresponding to previous bets.

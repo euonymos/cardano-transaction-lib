@@ -168,16 +168,16 @@ derive instance Generic BetRefAction _
 
 instance
   HasPlutusSchema BetRefAction
-    ( "Bet"
+    ( "Take"
+        := PNil
+        @@ (S Z)
+
+        :+
+          "Bet"
         :=
           ( "guess" := I OracleAnswerDatum
               :+ PNil
           )
-        @@ (S Z)
-
-        :+ "Take"
-        := PNil
-
         @@ Z
         :+ PNil
     )
