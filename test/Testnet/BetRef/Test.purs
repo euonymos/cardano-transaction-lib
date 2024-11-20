@@ -84,7 +84,8 @@ import Test.Spec.Assertions (shouldEqual, shouldSatisfy)
 suite :: TestPlanM ContractTest Unit
 suite = do
   -- test "Placing first bet" firstBetTest'
-  test "Multiple bets - good steps" multipleBetsTest
+  -- test "Multiple bets - good steps" multipleBetsTest
+  test "Multiple bets - to small step" failingMultipleBetsTest
 
 firstBetTest' :: ContractTest
 firstBetTest' = withWallets ws $ firstBetTest
@@ -102,7 +103,7 @@ firstBetTest' = withWallets ws $ firstBetTest
       /\ [ BigNum.fromInt 500_000_000 ] -- bettor
 
 multipleBetsTest :: ContractTest
-multipleBetsTest = withWallets ws $
+multipleBetsTest = withWallets multipleBetsWallets $
   \(oracle /\ deployer /\ holder /\ bettor1 /\ bettor2 /\ bettor3 /\ bettor4) ->
     mkMultipleBetsTest
       400
@@ -116,18 +117,42 @@ multipleBetsTest = withWallets ws $
       -- CTL: no support for test tokens out-of-the-box, so... <> valueSingleton testGoldAsset 1_000
       ]
       (oracle /\ deployer /\ holder)
-  where
-  ws =
-    [ BigNum.fromInt 500_000_000 ] -- oracle
 
-      /\ [ BigNum.fromInt 500_000_000 ] -- ref script deployer
-      /\ [ BigNum.fromInt 500_000_000 ] -- ref script holder
-      /\ [ BigNum.fromInt 500_000_000 ] -- bettor 1
-      /\ [ BigNum.fromInt 500_000_000 ] -- bettor 2
-      /\ [ BigNum.fromInt 500_000_000 ] -- bettor 3
-      /\ [ BigNum.fromInt 500_000_000 ] -- bettor 4
+failingMultipleBetsTest :: ContractTest
+failingMultipleBetsTest = withWallets multipleBetsWallets $
+  \(oracle /\ deployer /\ holder /\ bettor1 /\ bettor2 /\ bettor3 /\ bettor4) ->
+    do
+      ret /\ _ <- collectAssertionFailures mempty $ lift do
+        mkMultipleBetsTest
+          400
+          1_000
+          10_000_000
+          [ (bettor1 /\ mkGuess 1 /\ 10_000_000)
+          , (bettor2 /\ mkGuess 2 /\ 20_000_000)
+          , (bettor3 /\ mkGuess 3 /\ 30_000_000)
+          , (bettor2 /\ mkGuess 4 /\ 50_000_000)
+          , (bettor4 /\ mkGuess 5 /\ 55_000_000)
+          -- CTL: no support for test tokens out-of-the-box, so... <> valueSingleton testGoldAsset 1_000
+          ]
+          (oracle /\ deployer /\ holder)
+      ret `shouldSatisfy` isLeft
 
-  mkGuess = OracleAnswerDatum <<< BigInt.fromInt
+-- -----------------------------------------------------------------------------
+-- helpers for multiple bet tests
+
+mkGuess = OracleAnswerDatum <<< BigInt.fromInt
+
+multipleBetsWallets =
+  [ BigNum.fromInt 500_000_000 ] -- oracle
+
+    /\ [ BigNum.fromInt 500_000_000 ] -- ref script deployer
+    /\ [ BigNum.fromInt 500_000_000 ] -- ref script holder
+    /\ [ BigNum.fromInt 500_000_000 ] -- bettor 1
+    /\ [ BigNum.fromInt 500_000_000 ] -- bettor 2
+    /\ [ BigNum.fromInt 500_000_000 ] -- bettor 3
+    /\ [ BigNum.fromInt 500_000_000 ] -- bettor 4
+
+-- -----------------------------------------------------------------------------
 
 type Bet = (KeyWallet /\ OracleAnswerDatum /\ Int)
 
