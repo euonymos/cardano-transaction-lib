@@ -38,9 +38,9 @@ import Control.Monad.Error.Class (liftEither, liftMaybe)
 import Ctl.Internal.Types.Interval (POSIXTime)
 import Data.Bifunctor (lmap)
 import Data.List (List)
--- import JS.BigInt as BigInt
 import Effect.Exception (error)
 import JS.BigInt (BigInt)
+import JS.BigInt as BigInt
 
 -- | Goals made my the concerned team.
 type TeamGoals = BigInt
@@ -114,10 +114,14 @@ mkParams oraclePkh betUntil betReveal betStep = do
   eraSummaries <- getEraSummaries
   systemStart <- getSystemStart
   let slotToPosixTime' = slotToPosixTime eraSummaries systemStart
-  betUntil' <- liftMaybe (error "fromBigInt failure") $ wrap <$> fromBigInt
-    betUntil
-  betReveal' <- liftMaybe (error "fromBigInt failure") $ wrap <$> fromBigInt
-    betReveal
+  betUntil' <- liftMaybe (error "fromBigInt failure") $ wrap <$>
+    ( fromBigInt
+        $ betUntil + BigInt.fromInt 1
+    ) -- FIXME: note on intervals
+  betReveal' <- liftMaybe (error "fromBigInt failure") $ wrap <$>
+    ( fromBigInt
+        $ betReveal + BigInt.fromInt 1
+    ) -- FIXME: note on intervals
   betUntilTime <- liftEither $ lmap (error <<< show)
     $ slotToPosixTime' betUntil'
   betRevealTime <- liftEither $ lmap (error <<< show)

@@ -21,7 +21,7 @@ import Cardano.Types.TransactionUnspentOutput
   ( TransactionUnspentOutput(TransactionUnspentOutput)
   )
 import Contract.Address (Address, mkAddress)
-import Contract.Log (logDebug')
+import Contract.Log (logDebug', logInfo')
 import Contract.Monad (Contract)
 import Contract.PlutusData (toData)
 import Contract.ScriptLookups (ScriptLookups)
@@ -54,6 +54,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe)
 import Data.Unit (Unit, unit)
 import Effect.Exception (error)
+import JS.BigInt as BigInt
 import Test.Ctl.Testnet.BetRef.Types
   ( BetRefAction(Bet)
   , BetRefDatum(BetRefDatum)
@@ -126,9 +127,18 @@ placeBet refScript script brp guess bet bettorPkh mPreviousBetsUtxoRef = do
       logDebug' $ "2. previous guesses: " <> show previousBets
       --     betUntilSlot <- enclosingSlotFromTime' (timeFromPlutus $ brpBetUntil brp)
       --     gyLogDebug' "" $ printf "3. bet until slot %s" (show betUntilSlot)
+
+      -- eraSummaries <- getEraSummaries
+      -- systemStart <- getSystemStart
+      -- let slotToPosixTime' = slotToPosixTime eraSummaries systemStart
+      let brpBetUntil = (unwrap brp).brpBetUntil
+      logInfo' $ "brpBetUntil: " <> show brpBetUntil
       let
         (txValidRange :: POSIXTimeRange) = Interval.to $
-          (unwrap brp).brpBetUntil
+          ( wrap $ (\v -> v - (BigInt.fromInt 1000)) $ unwrap $
+              (unwrap brp).brpBetUntil
+          )
+      logInfo' $ "txValidRange: " <> show txValidRange
       let
         datum = toData $ BetRefDatum
           { brdBets: singleton (bettorPkh /\ guess) <> (unwrap dat).brdBets

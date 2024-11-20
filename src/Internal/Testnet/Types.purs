@@ -37,7 +37,6 @@ type TestnetConfig =
   , suppressLogs :: Boolean
   , hooks :: Hooks
   , clusterConfig :: TestnetClusterConfig
-  , preserveTmpFolder :: Boolean
   }
 
 type TestnetClusterConfig =

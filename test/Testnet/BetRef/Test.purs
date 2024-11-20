@@ -310,6 +310,7 @@ runDeployScript
   oraclePaymentKey <- liftAff $ getPrivatePaymentKey oracleWallet
   let oraclePkh = (wrap <<< privateKeyToPkh) oraclePaymentKey
   params <- mkParams oraclePkh betUntil betReveal betStep
+  logInfo' $ "BetRefParams are: " <> show params
   script <- mkScript params
   withKeyWallet scriptDeployer do
     holderPaymentKey <- liftAff $ getPrivatePaymentKey scriptHolder

@@ -219,7 +219,6 @@ buildLocalTestnetConfig options =
       , slotLength: Seconds 0.05
       , epochSize: Nothing
       }
-  , preserveTmpFolder: true
   }
 
 -- | Plutip does not generate private stake keys for us, so we make one and

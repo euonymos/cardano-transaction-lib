@@ -65,8 +65,7 @@ defaultTestnetConfig =
   , clusterConfig:
       { testnetMagic: 2
       , era: Conway
-      , slotLength: Seconds 0.1
+      , slotLength: Seconds 0.5
       , epochSize: Nothing
       }
-  , preserveTmpFolder: true
   }
