@@ -1,4 +1,7 @@
-module Test.Ctl.Testnet.BetRef.Operations where
+module Test.Ctl.Testnet.BetRef.Operations
+  ( placeBet
+  , takePot
+  ) where
 
 import Contract.Prelude
 import Prelude
@@ -41,6 +44,7 @@ import Contract.TxConstraints
 import Contract.TxConstraints
   ( mustBeSignedBy
   , mustPayToScript
+  , mustReferenceOutput
   , mustSpendScriptOutputUsingScriptRef
   , mustValidateIn
   )
@@ -56,7 +60,7 @@ import Data.Unit (Unit, unit)
 import Effect.Exception (error)
 import JS.BigInt as BigInt
 import Test.Ctl.Testnet.BetRef.Types
-  ( BetRefAction(Bet)
+  ( BetRefAction(Bet, Take)
   , BetRefDatum(BetRefDatum)
   , BetRefParams
   , OracleAnswerDatum
@@ -183,139 +187,66 @@ placeBet refScript script brp guess bet bettorPkh mPreviousBetsUtxoRef = do
       balancedTx <- balanceTx unbalancedTx utxo mempty
       pure balancedTx
 
--- -- | Operation to take UTxO corresponding to previous bets.
--- takeBets ::
---   forall m v.
---   ( HasCallStack
---   , GYTxQueryMonad m
---   , v `VersionIsGreaterOrEqual` 'PlutusV2
---   ) =>
---   -- | Reference Script output.
---   GYTxOutRef ->
---   -- | The script
---   GYValidator v ->
---   -- | Validator params.
---   BetRefParams ->
---   -- | Script UTxO to consume.
---   GYTxOutRef ->
---   -- | Own address.
---   GYAddress ->
---   -- | Oracle reference input.
---   GYTxOutRef ->
---   m (GYTxSkeleton v)
--- takeBets refScript script brp previousBetsUtxoRef ownAddr oracleRefInput = do
---   pkh <- addressToPubKeyHash' ownAddr
---   previousUtxo <- utxoAtTxOutRef' previousBetsUtxoRef
---   (_addr, _previousValue, dat) <- utxoDatum' previousUtxo
---   betRevealSlot <- enclosingSlotFromTime' (timeFromPlutus $ brpBetReveal brp)
---   return $
---     input refScript (validatorToScript script) previousBetsUtxoRef dat Take
---       <> isInvalidBefore betRevealSlot
---       <> mustHaveRefInput oracleRefInput
---       <> mustBeSignedBy pkh
+-- | Operation to take UTxO corresponding to previous bets.
+takePot
+  :: TransactionInput
+  -- ^ Reference Script output.
+  -> PlutusScript
+  -- ^ The script
+  -> BetRefParams
+  -- ^ Betting parameters.
+  -> TransactionInput
+  -- ^ Bet UTxO to consume.
+  -> PaymentPubKeyHash
+  -- ^ Bettors's PKH.
+  -> TransactionInput
+  -- ^ Oracle reference input.
+  -> Contract Transaction
+takePot refScript script brp previousBetsUtxoRef bettorPkh oracleRefInput = do
+  logDebug' $ "bettorPkh: " <> show bettorPkh
 
--- -- | Utility builder
--- input ::
---   v `VersionIsGreaterOrEqual` 'PlutusV2 =>
---   GYTxOutRef ->
---   GYScript v ->
---   GYTxOutRef ->
---   BetRefDatum ->
---   BetRefAction ->
---   GYTxSkeleton v
--- input refScript script inputRef dat red =
---   mustHaveInput
---     GYTxIn
---       { gyTxInTxOutRef = inputRef
---       , gyTxInWitness =
---           GYTxInWitnessScript
---             (GYInReference refScript script)
---             (datumFromPlutusData dat)
---             (redeemerFromPlutusData red)
---       }
+  previousUtxo <- liftMaybe (error "Cannot find UTxO by ref")
+    =<< getUtxo previousBetsUtxoRef
+  logDebug' $ "1. previousUtxo: " <> show previousUtxo
 
--- --------------------------------------------------------------------------------
--- -- Additional operations
--- --------------------------------------------------------------------------------
+  let brpBetUntil = (unwrap brp).brpBetReveal
+  logInfo' $ "brpBetUntil: " <> show brpBetUntil
+  let (txValidRange :: POSIXTimeRange) = Interval.from brpBetUntil
+  logInfo' $ "txValidRange: " <> show txValidRange
 
--- {- | Queries the cuurent slot, calculates parameters and builds
--- a script that is ready to be deployed.
--- -}
--- mkScript ::
---   forall m (v :: PlutusVersion).
---   ( GYTxQueryMonad m
---   , SingPlutusVersionI v
---   , Api.IsPlutusScriptLanguage (PlutusVersionToApi v)
---   ) =>
---   -- | How many slots betting should be open
---   Integer ->
---   -- | How many slots should pass before oracle reveals answer
---   Integer ->
---   -- | Oracle PKH
---   GYPubKeyHash ->
---   -- | Bet step value
---   GYValue ->
---   m (BetRefParams, GYValidator v)
--- mkScript betUntil betReveal oraclePkh betStep = do
---   currSlot <- slotToInteger <$> slotOfCurrentBlock
---   -- Calculate params for the script
---   let betUntil' = slotFromApi $ fromInteger $ currSlot + betUntil
---   let betReveal' = slotFromApi $ fromInteger $ currSlot + betReveal
---   betUntilTime <- slotToBeginTime betUntil'
---   betRevealTime <- slotToBeginTime betReveal'
---   let params =
---         BetRefParams
---           (pubKeyHashToPlutus oraclePkh)
---           (timeToPlutus betUntilTime)
---           (timeToPlutus betRevealTime)
---           (valueToPlutus betStep)
---   gyLogDebug' "" $ printf "Parameters: %s" (show params)
---   -- TODO: this might be improved once support for blueprints is merged.
---   let s = unsafePerformIO $ do
---         lookupEnv "AIKEN_BET_REF" >>= \case
---           Nothing -> pure $ mkBetRefValidator params
---           Just _ -> do
---             putStrLn "Using Aiken-based on-chain script"
---             mkBetRefValidatorExt params
---   pure (params, s)
+  refScriptUtxo <- liftMaybe (error "cannot find ref script utxo")
+    =<< getUtxo refScript
 
--- {- | Validator in question, obtained after giving required parameters.
--- This uses PlutusTx version of the validator
--- -}
--- mkBetRefValidator ::
---   forall (v :: PlutusVersion).
---   SingPlutusVersionI v =>
---   BetRefParams ->
---   GYValidator v
--- mkBetRefValidator brp = validatorFromPlutus $ betRefValidator brp
+  oracleUtxo <- liftMaybe (error "cannot find oracle utxo")
+    =<< getUtxo oracleRefInput
 
--- -- | Make a validator out of external UPLC envelope
--- mkBetRefValidatorExt ::
---   forall (v :: PlutusVersion).
---   SingPlutusVersionI v =>
---   BetRefParams ->
---   IO (GYValidator v)
--- mkBetRefValidatorExt BetRefParams {..} = do
---   v <- readValidator @v "tests-unified/script/bet_ref_validator.plutus"
---   let (Api.PlutusScriptSerialised sbs) = validatorToApi v
---   let prog :: UPLCProgram = uncheckedDeserialiseUPLC sbs
---   let params =
---         Constr
---           0
---           [ toData brpOraclePkh
---           , toData brpBetUntil
---           , toData brpBetReveal
---           , toData brpBetStep -- TODO: might be flaky
---           ]
---   let args = [params]
---   let appliedProg = applyArguments prog args
---   -- print $ Api.pretty appliedProg
---   pure $ validatorFromSerialisedScript @v $ serialiseUPLC appliedProg
+  let
+    refScriptTUO =
+      ( TransactionUnspentOutput
+          { input: refScript, output: refScriptUtxo }
+      )
 
--- type UPLCProgram = Program DeBruijn DefaultUni DefaultFun ()
+    constraints :: TxConstraints
+    constraints = mconcat
+      [ mustSpendScriptOutputUsingScriptRef
+          previousBetsUtxoRef
+          (RedeemerDatum $ toData Take)
+          (RefInput refScriptTUO)
+      , mustReferenceOutput oracleRefInput
+      , mustValidateIn txValidRange
+      , mustBeSignedBy bettorPkh
+      ]
 
--- applyArguments :: UPLCProgram -> [Data] -> UPLCProgram
--- applyArguments p args =
---   let termArgs = fmap ((,) () . PLC.mkConstant ()) args
---       apply t = PLC.mkIterApp t termArgs
---    in over UPLC.progTerm apply p
+    utxo = Map.singleton previousBetsUtxoRef previousUtxo
+      `Map.union` Map.singleton refScript refScriptUtxo
+      `Map.union` Map.singleton oracleRefInput oracleUtxo
+
+    lookups :: ScriptLookups
+    lookups = mconcat
+      [ validator script
+      , unspentOutputs utxo
+      ]
+
+  unbalancedTx /\ _utxoMap <- mkUnbalancedTx lookups constraints
+  balancedTx <- balanceTx unbalancedTx utxo mempty
+  pure balancedTx

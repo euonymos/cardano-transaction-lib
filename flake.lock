@@ -2020,10 +2020,11 @@
         "pre-commit-hooks": "pre-commit-hooks"
       },
       "locked": {
-        "dirtyRev": "080e2b4852f162d33e8a3d5e2faaa9b5400d878c-dirty",
-        "dirtyShortRev": "080e2b4-dirty",
-        "lastModified": 1730916256,
-        "narHash": "sha256-wVSdARdey5PszmmiMtpBibUaBsfOls43XqMUrWqvBRc=",
+        "lastModified": 1732165946,
+        "narHash": "sha256-6egb13DomCowqDgNkjpBzNKtHvaoLpHlAI1lZrwV6uE=",
+        "ref": "refs/heads/euonymos/fix-era-summaries",
+        "rev": "b80892e830d334f7b2bd4afaf13191af6fbe2c2c",
+        "revCount": 146,
         "type": "git",
         "url": "file:///home/euonymos/src/mlabs/clb"
       },

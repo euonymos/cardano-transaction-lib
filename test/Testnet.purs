@@ -44,7 +44,7 @@ main = interruptOnSignal SIGINT =<< launchAff do
   let config = defaultTestnetConfig { suppressLogs = false }
   flip cancelWith (effectCanceler (exitCode 1)) do
     Utils.interpretWithConfig
-      defaultConfig { timeout = Just $ Milliseconds 70_000.0, exit = true }
+      defaultConfig { timeout = Just $ Milliseconds 600_000.0, exit = true }
       $ group "cardano-testnet" do
           testTestnetContracts config BetRef.suite
 --           testTestnetContracts config Mnemonics.suite

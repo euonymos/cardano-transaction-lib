@@ -10,9 +10,11 @@ import Cardano.Types.BigNum as BigNum
 import Cardano.Types.Credential
   ( Credential(PubKeyHashCredential, ScriptHashCredential)
   )
+import Cardano.Types.OutputDatum (OutputDatum(OutputDatum))
 import Cardano.Types.PlutusScript (PlutusScript, hash)
 import Cardano.Types.ScriptHash (ScriptHash)
 import Cardano.Types.ScriptRef (ScriptRef(PlutusScriptRef), getPlutusScript)
+import Cardano.Types.Value as Value
 import Cardano.Wallet.Key
   ( KeyWallet
   , getPrivatePaymentKey
@@ -27,8 +29,10 @@ import Contract.Address
   , getNetworkId
   , mkAddress
   )
+import Contract.Chain (currentSlot, waitUntilSlot)
 import Contract.Log (logInfo')
 import Contract.Monad (Contract)
+import Contract.PlutusData (PlutusData, toData)
 import Contract.ScriptLookups (ScriptLookups)
 import Contract.ScriptLookups (validator)
 import Contract.Scripts (validatorHash)
@@ -38,6 +42,7 @@ import Contract.Test.Assert
   , collectAssertionFailures
   , label
   )
+import Contract.Time (getEraSummaries, getSystemStart, posixTimeToSlot)
 import Contract.Transaction
   ( TransactionInput
   , TransactionOutput
@@ -47,10 +52,12 @@ import Contract.Transaction
   , submit
   )
 import Contract.TxConstraints
-  ( TxConstraints
+  ( DatumPresence(DatumInline)
+  , mustPayToPubKeyWithDatum
+  , mustPayToPubKeyWithScriptRef
   )
 import Contract.TxConstraints
-  ( mustPayToPubKeyWithScriptRef
+  ( TxConstraints
   )
 import Contract.UnbalancedTx (mkUnbalancedTx)
 import Contract.Utxos (utxosAt)
@@ -59,6 +66,7 @@ import Control.Monad.Error.Class (liftMaybe)
 import Control.Monad.Trans.Class (lift)
 import Ctl.Examples.ExUnits as ExUnits
 import Data.Array (head, uncons)
+import Data.Bifunctor (lmap)
 import Data.Either (isLeft)
 import Data.Lens (view)
 import Data.List as List
@@ -73,7 +81,7 @@ import JS.BigInt as BigInt
 import Mote (test)
 import Mote.TestPlanM (TestPlanM)
 import Test.Ctl.Testnet.BetRef.BetRefValidator (mkScript)
-import Test.Ctl.Testnet.BetRef.Operations (placeBet)
+import Test.Ctl.Testnet.BetRef.Operations (placeBet, takePot)
 import Test.Ctl.Testnet.BetRef.Types
   ( BetRefParams
   , OracleAnswerDatum(OracleAnswerDatum)
@@ -85,7 +93,12 @@ suite :: TestPlanM ContractTest Unit
 suite = do
   -- test "Placing first bet" firstBetTest'
   -- test "Multiple bets - good steps" multipleBetsTest
-  test "Multiple bets - to small step" failingMultipleBetsTest
+  -- test "Multiple bets - to small step" failingMultipleBetsTest
+  test "Just take bet pot" takeBetsTest
+
+-- -----------------------------------------------------------------------------
+-- Place bids
+-- -----------------------------------------------------------------------------
 
 firstBetTest' :: ContractTest
 firstBetTest' = withWallets ws $ firstBetTest
@@ -139,6 +152,7 @@ failingMultipleBetsTest = withWallets multipleBetsWallets $
 
 -- -----------------------------------------------------------------------------
 -- helpers for multiple bet tests
+-- -----------------------------------------------------------------------------
 
 mkGuess = OracleAnswerDatum <<< BigInt.fromInt
 
@@ -311,6 +325,116 @@ runPlaceBet oRef script params guess bet mPrevBet bettorPkh = do
   txHash <- submit balancedSignedTx
   awaitTxConfirmed txHash
   pure (balancedSignedTx /\ txHash)
+
+-- -----------------------------------------------------------------------------
+-- Take pot tests
+-- -----------------------------------------------------------------------------
+
+takeBetsTest :: ContractTest
+takeBetsTest = withWallets multipleBetsWallets $
+  \(oracle /\ deployer /\ holder /\ bettor1 /\ bettor2 /\ bettor3 /\ bettor4) ->
+    mkTakeBetsTest
+      200
+      400
+      10_000_000
+      [ (bettor1 /\ mkGuess 1 /\ 10_000_000)
+      , (bettor2 /\ mkGuess 2 /\ 20_000_000)
+      , (bettor3 /\ mkGuess 3 /\ 30_000_000)
+      , (bettor2 /\ mkGuess 4 /\ 50_000_000)
+      , (bettor4 /\ mkGuess 5 /\ 65_000_000)
+      -- CTL: no support for test tokens out-of-the-box, so... <> valueSingleton testGoldAsset 1_000
+      ]
+      (oracle /\ deployer /\ holder)
+      4
+      bettor2
+
+mkTakeBetsTest
+  :: Int
+  -> Int
+  -> Int
+  -> Array Bet
+  -> (KeyWallet /\ KeyWallet /\ KeyWallet)
+  -> Int
+  -> KeyWallet
+  -> Contract Unit
+mkTakeBetsTest
+  betUntil
+  betReveal
+  stepCoins
+  bets
+  wallets
+  answer
+  winner = do
+  -- Deploy ref script
+  (params /\ oRef /\ script) <- runDeployScript
+    (BigInt.fromInt betUntil)
+    (BigInt.fromInt betReveal)
+    (lovelaceValueOf $ BigNum.fromInt stepCoins)
+    wallets
+  -- Place bets
+  runMultipleBets params oRef script bets
+  -- Try to take the pot
+  _ <- runTakePot params oRef script answer winner
+  pure unit
+
+runTakePot
+  :: BetRefParams
+  -> TransactionInput
+  -> PlutusScript
+  -> Int
+  -> KeyWallet
+  -> Contract (Transaction /\ TransactionHash)
+runTakePot params oRef script answer winner = do
+  withKeyWallet winner do
+    -- wait till the reveal slot
+    current <- currentSlot
+    eraSummaries <- getEraSummaries
+    systemStart <- getSystemStart
+    revealSlot <- liftEither $ lmap (error <<< show)
+      $ posixTimeToSlot eraSummaries systemStart (unwrap params).brpBetReveal
+    -- FIXME: This can't seem to be correct though it works
+    waitUntil <- liftMaybe (error "canot calculate reveal slot") $
+      wrap <$> unwrap current `BigNum.add` unwrap revealSlot
+    logInfo' $ "waiting untill slot: " <> show waitUntil
+    tip <- waitUntilSlot waitUntil
+    logInfo' $ "wait completed, tip is: " <> show tip
+    -- betRef
+    address <- mkAddress (wrap $ ScriptHashCredential $ hash script) Nothing
+    utxoMap <- utxosAt address
+    betRef <- liftMaybe (error "cannot find bet utxo")
+      $ (head <<< Set.toUnfoldable <<< Map.keys) utxoMap
+    -- bettorPkh
+    bettorKey <- liftAff $ getPrivatePaymentKey winner
+    let bettorPkh = (wrap <<< privateKeyToPkh) bettorKey
+    -- publish the answer
+    let datum = toData $ OracleAnswerDatum $ BigInt.fromInt answer
+    oracleRef <- addRefInput (unwrap params).brpOraclePkh datum
+    -- take the pot
+    balancedTx <- takePot oRef script params betRef bettorPkh oracleRef
+    balancedSignedTx <- signTransaction balancedTx
+    txHash <- submit balancedSignedTx
+    awaitTxConfirmed txHash
+    pure (balancedSignedTx /\ txHash)
+
+addRefInput :: PaymentPubKeyHash -> PlutusData -> Contract TransactionInput
+addRefInput pkh datum = do
+  let
+    constraints :: TxConstraints
+    constraints = mconcat
+      [ mustPayToPubKeyWithDatum pkh datum DatumInline Value.empty
+      ]
+
+  unbalancedTx /\ _utxosMap <- mkUnbalancedTx mempty constraints
+  balancedTx <- balanceTx unbalancedTx Map.empty mempty
+  balancedSignedTx <- signTransaction balancedTx
+  txHash <- submit balancedSignedTx
+  awaitTxConfirmed txHash
+
+  address <- mkAddress (wrap $ PubKeyHashCredential $ unwrap pkh) Nothing
+  utxoMap <- utxosAt address
+  prevUtxoRef <- liftMaybe (error "cannot find the only oracle utxo")
+    $ (head <<< Set.toUnfoldable <<< Map.keys) utxoMap
+  pure prevUtxoRef
 
 -- -----------------------------------------------------------------------------
 -- Auxiliary runners
