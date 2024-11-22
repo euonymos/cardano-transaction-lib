@@ -6,6 +6,7 @@ import Contract.Prelude hiding (apply)
 import Prelude
 
 import Cardano.Types (Transaction, TransactionHash, _body, _fee)
+import Cardano.Types.BigNum (BigNum)
 import Cardano.Types.BigNum as BigNum
 import Cardano.Types.Credential
   ( Credential(PubKeyHashCredential, ScriptHashCredential)
@@ -61,17 +62,20 @@ import Contract.TxConstraints
   )
 import Contract.UnbalancedTx (mkUnbalancedTx)
 import Contract.Utxos (utxosAt)
-import Contract.Value (Value, empty, lovelaceValueOf)
-import Control.Monad.Error.Class (liftMaybe)
+import Contract.Value (Value, add, empty, lovelaceValueOf, minus)
+import Control.Monad.Error.Class (liftMaybe, throwError)
 import Control.Monad.Trans.Class (lift)
 import Ctl.Examples.ExUnits as ExUnits
-import Data.Array (head, uncons)
+import Ctl.Internal.Contract.Monad (getQueryHandle)
+import Ctl.Internal.Service.Error (pprintClientError)
+import Data.Array (cons, fromFoldable, head, uncons, zip)
 import Data.Bifunctor (lmap)
 import Data.Either (isLeft)
 import Data.Lens (view)
 import Data.List as List
 import Data.Map (Map)
 import Data.Map as Map
+import Data.Maybe (fromJust)
 import Data.Set as Set
 import Data.Unit (unit)
 import Effect.Aff (try)
@@ -80,6 +84,7 @@ import JS.BigInt (BigInt)
 import JS.BigInt as BigInt
 import Mote (test)
 import Mote.TestPlanM (TestPlanM)
+import Partial.Unsafe (unsafePartial)
 import Test.Ctl.Testnet.BetRef.BetRefValidator (mkScript)
 import Test.Ctl.Testnet.BetRef.Operations (placeBet, takePot)
 import Test.Ctl.Testnet.BetRef.Types
@@ -95,6 +100,8 @@ suite = do
   -- test "Multiple bets - good steps" multipleBetsTest
   -- test "Multiple bets - to small step" failingMultipleBetsTest
   test "Just take bet pot" takeBetsTest
+  -- test "Take by wrong guesser" wrongGuesserTakeBetsTest
+  -- test "The first bet matters" badUpdatedGuessTakeBetsTest
 
 -- -----------------------------------------------------------------------------
 -- Place bids
@@ -190,23 +197,115 @@ mkMultipleBetsTest
     (lovelaceValueOf $ BigNum.fromInt stepCoins)
     wallets
 
-  -- -- Get the balance
-  -- balanceBefore <- getBalance
-  -- gyLogDebug' "" $ printf "balanceBeforeAllTheseOps: %s" (mconcat balanceBefore)
+  bets' <- liftAff $ for bets $ \(w /\ a /\ v) -> do
+    bettorKey <- getPrivatePaymentKey w
+    let bettorPkh = (wrap <<< privateKeyToPkh) bettorKey
+    pure (bettorPkh /\ a /\ v)
+
+  -- Get the balance
+  balanceBefore <- getBalance bets'
+  logInfo' $ "balanceBeforeAllTheseOps: " <> show balanceBefore
 
   -- Run operations
   runMultipleBets params oRef script bets
 
--- -- Get the balance again
--- balanceAfter <- getBalance
--- gyLogDebug' "" $ printf "balanceAfterAllTheseOps: %s" (mconcat balanceAfter)
+  -- Get the balance again
+  balanceAfter <- getBalance bets'
+  logInfo' $ "balanceAfterAllTheseOps: " <> show balanceAfter
 
--- -- Check the difference
--- verify $
---   zip3
---     walletsAndBets
---     balanceBefore
---     balanceAfter
+  -- Check the difference
+  verify $ zip (unsafePartial $ walletsAndBets bets') $ zip balanceBefore
+    balanceAfter
+
+  where
+
+  -- \| Returns the balances for all wallets that play the game
+  getBalance
+    :: Array (PaymentPubKeyHash /\ OracleAnswerDatum /\ Int)
+    -> Contract (Array Value)
+  getBalance bets = for (unsafePartial $ walletsAndBets bets) $ \(pkh /\ _) ->
+    do
+      addr <- mkAddress' pkh Nothing
+      queryHandle <- getQueryHandle
+      eiResponse <- liftAff $ queryHandle.utxosAt addr
+      case eiResponse of
+        Left err -> liftEffect $ throw $
+          "getWalletBalance: utxosAt call error: " <>
+            pprintClientError err
+        Right utxoMap -> do
+          liftM
+            ( error $
+                "getWalletBalance: Unable to get payment credential from Address"
+            )
+            $ Value.sum
+                ( map _.amount $ map unwrap $ fromFoldable $
+                    Map.values utxoMap
+                )
+
+  -- \| Builds the list of wallets and their respective bets made.
+  -- The idea here is that if we encounter a new wallet,
+  -- i.e., wallet for whose we haven't yet computed value lost,
+  -- we calculate the total once so we can ignore other entries
+  -- for this wallet.
+  -- FIXME: very ineffective, can be simplified drastically.
+  walletsAndBets
+    :: Partial
+    => Array (PaymentPubKeyHash /\ OracleAnswerDatum /\ Int)
+    -> Array (PaymentPubKeyHash /\ Value)
+  walletsAndBets bets = go bets Set.empty []
+    where
+    go allBets set acc = case uncons allBets of
+      Just { head: bet, tail: remBets } ->
+        let
+          (wallet /\ _ /\ _) = bet
+        in
+          if Set.member wallet set then go remBets set acc -- already summed
+          else
+            go remBets (Set.insert wallet set)
+              ((wallet /\ totalBets wallet allBets Value.empty) `cons` acc)
+      Nothing -> acc
+
+  -- \| Recursive function that sums all bets for the corresponding wallet.
+  totalBets
+    :: Partial
+    => PaymentPubKeyHash
+    -> Array (PaymentPubKeyHash /\ OracleAnswerDatum /\ Int)
+    -> Value
+    -> Value
+  totalBets wallet allBets acc = case uncons allBets of
+    Nothing -> acc
+    Just { head: (wallet' /\ _ /\ bet), tail: remBets } ->
+      let
+        bet' = lovelaceValueOf $ BigNum.fromInt bet
+      in
+        if wallet' == wallet then fromJust (acc `Value.add` bet')
+        else fromJust (Value.empty `Value.minus` acc)
+
+  negate :: BigNum -> Maybe BigNum
+  negate n = BigNum.zero `BigNum.sub` n
+
+  -- \| Function to verify that the wallet indeed lost by /roughly/ the bet amount.
+  -- We say /roughly/ as fees is assumed to be within (0, 1 ada].
+  verify
+    :: Array ((PaymentPubKeyHash /\ Value) /\ Value /\ Value) -> Contract Unit
+  verify es = case uncons es of
+    Nothing -> pure unit
+    Just { head: ((pkh /\ diff) /\ vBefore /\ vAfter), tail: es } -> do
+      let
+        vAfterWithoutFees = unsafePartial $ fromJust $ vBefore `Value.add` diff
+        threshold = lovelaceValueOf $ BigNum.fromInt 1_500_000 -- 1.5 ada
+      if
+        vAfter `Value.lt` vAfterWithoutFees
+          &&
+            ( unsafePartial $ fromJust $ vAfterWithoutFees `Value.minus`
+                threshold
+            ) `Value.geq` vAfter then verify es
+      else
+        throwError $ error $ "For wallet " <> show pkh
+          <> " expected value (without fees) "
+          <> show vAfterWithoutFees
+          <> ", but actual is "
+          <> show vAfter
 
 runMultipleBets
   :: BetRefParams
@@ -334,8 +433,8 @@ takeBetsTest :: ContractTest
 takeBetsTest = withWallets multipleBetsWallets $
   \(oracle /\ deployer /\ holder /\ bettor1 /\ bettor2 /\ bettor3 /\ bettor4) ->
     mkTakeBetsTest
-      200
-      400
+      120
+      20
       10_000_000
       [ (bettor1 /\ mkGuess 1 /\ 10_000_000)
       , (bettor2 /\ mkGuess 2 /\ 20_000_000)
@@ -347,6 +446,48 @@ takeBetsTest = withWallets multipleBetsWallets $
       (oracle /\ deployer /\ holder)
       4
       bettor2
+
+wrongGuesserTakeBetsTest :: ContractTest
+wrongGuesserTakeBetsTest = withWallets multipleBetsWallets $
+  \(oracle /\ deployer /\ holder /\ bettor1 /\ bettor2 /\ bettor3 /\ bettor4) ->
+    do
+      ret /\ _ <- collectAssertionFailures mempty $ lift do
+        mkTakeBetsTest
+          100
+          10
+          10_000_000
+          [ (bettor1 /\ mkGuess 1 /\ 10_000_000)
+          , (bettor2 /\ mkGuess 2 /\ 20_000_000)
+          , (bettor3 /\ mkGuess 3 /\ 30_000_000)
+          , (bettor2 /\ mkGuess 4 /\ 50_000_000)
+          , (bettor4 /\ mkGuess 5 /\ 65_000_000)
+          -- CTL: no support for test tokens out-of-the-box, so... <> valueSingleton testGoldAsset 1_000
+          ]
+          (oracle /\ deployer /\ holder)
+          5
+          bettor2
+      ret `shouldSatisfy` isLeft
+
+badUpdatedGuessTakeBetsTest :: ContractTest
+badUpdatedGuessTakeBetsTest = withWallets multipleBetsWallets $
+  \(oracle /\ deployer /\ holder /\ bettor1 /\ bettor2 /\ bettor3 /\ bettor4) ->
+    do
+      ret /\ _ <- collectAssertionFailures mempty $ lift do
+        mkTakeBetsTest
+          100
+          10
+          10_000_000
+          [ (bettor1 /\ mkGuess 1 /\ 10_000_000)
+          , (bettor2 /\ mkGuess 2 /\ 20_000_000)
+          , (bettor3 /\ mkGuess 3 /\ 30_000_000)
+          , (bettor2 /\ mkGuess 4 /\ 50_000_000)
+          , (bettor4 /\ mkGuess 5 /\ 65_000_000)
+          -- CTL: no support for test tokens out-of-the-box, so... <> valueSingleton testGoldAsset 1_000
+          ]
+          (oracle /\ deployer /\ holder)
+          2
+          bettor2
+      ret `shouldSatisfy` isLeft
 
 mkTakeBetsTest
   :: Int
