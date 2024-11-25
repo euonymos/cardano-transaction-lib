@@ -141,8 +141,10 @@ let
               )
             )
           ];
+        # here we export socket emulator binary so users can use it with cardano-testnet
+        # like: export CARDANO_NODE=$SOCKET_EMULATOR
         shellHook = ''
-          export CARDANO_NODE=${pkgs.clb}/bin/cardano-node-socket-emulator
+          export SOCKET_EMULATOR=${pkgs.clb}/bin/cardano-node-socket-emulator
           export NODE_PATH="${nodeModules}/lib/node_modules"
           ln -sfn $NODE_PATH node_modules
           export PATH="${nodeModules}/bin:$PATH"

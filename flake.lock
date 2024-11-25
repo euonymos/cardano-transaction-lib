@@ -1656,17 +1656,18 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1729533565,
-        "narHash": "sha256-NX5Kc/cHNYvQLjBSeoo1IRQBeftwitZhD7FSQ+LPzFY=",
-        "ref": "refs/heads/euonymos/ogmios6.7.0-6.8.0",
-        "rev": "39e23d9543b6696f96d790962bf921016371b205",
-        "revCount": 268,
-        "type": "git",
-        "url": "file:///home/euonymos/src/mlabs/cardano.nix"
+        "lastModified": 1731425920,
+        "narHash": "sha256-UOdumlzrv8684dFn7WdGXVNLJcigok9uN1UqdMEcqF4=",
+        "owner": "mlabs-haskell",
+        "repo": "cardano.nix",
+        "rev": "422b9398d7a7ca1f109900781c7d029db107c8c0",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:///home/euonymos/src/mlabs/cardano.nix"
+        "owner": "mlabs-haskell",
+        "repo": "cardano.nix",
+        "rev": "422b9398d7a7ca1f109900781c7d029db107c8c0",
+        "type": "github"
       }
     },
     "cardano-node": {
@@ -2020,17 +2021,17 @@
         "pre-commit-hooks": "pre-commit-hooks"
       },
       "locked": {
-        "lastModified": 1732165946,
-        "narHash": "sha256-6egb13DomCowqDgNkjpBzNKtHvaoLpHlAI1lZrwV6uE=",
-        "ref": "refs/heads/euonymos/fix-era-summaries",
-        "rev": "b80892e830d334f7b2bd4afaf13191af6fbe2c2c",
-        "revCount": 146,
-        "type": "git",
-        "url": "file:///home/euonymos/src/mlabs/clb"
+        "lastModified": 1732316938,
+        "narHash": "sha256-fWcjh4szEMVuGa71YKOVmVsNb3oV+eNJrsRsF6ckZoo=",
+        "owner": "mlabs-haskell",
+        "repo": "clb",
+        "rev": "e9c4270df9e8fca8ad1c62ddc0f36b224afd2dfc",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:///home/euonymos/src/mlabs/clb"
+        "owner": "mlabs-haskell",
+        "repo": "clb",
+        "type": "github"
       }
     },
     "crane": {

@@ -42,8 +42,7 @@
     cardano-node.url = "github:input-output-hk/cardano-node/d7abccd4e90c38ff5cd4d6a7839689d888332056";
 
     # CLB emulator
-    # clb.url = "github:mlabs-haskell/clb/9dcbaec98efaef6bd4c8f46c329660fa436c1839";
-    clb.url = "/home/euonymos/src/mlabs/clb";
+    clb.url = "github:mlabs-haskell/clb";
 
     # Repository with network parameters
     # NOTE(bladyjoker): Cardano configurations (yaml/json) often change format and break, that's why we pin to a specific known version.
@@ -55,7 +54,9 @@
 
     # Get Ogmios and Kupo from cardano-nix
     cardano-nix = {
-      url = "/home/euonymos/src/mlabs/cardano.nix";
+      # it stopped working for later commits on main somehow, so here is the merge
+      # commit for branch that brings support for ogmios 6.8.0
+      url = "github:mlabs-haskell/cardano.nix?rev=422b9398d7a7ca1f109900781c7d029db107c8c0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
