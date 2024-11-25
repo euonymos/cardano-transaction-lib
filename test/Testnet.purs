@@ -45,8 +45,11 @@ main = interruptOnSignal SIGINT =<< launchAff do
   flip cancelWith (effectCanceler (exitCode 1)) do
     Utils.interpretWithConfig
       defaultConfig { timeout = Just $ Milliseconds 600_000.0, exit = true }
-      $ group "cardano-testnet" do
-          testTestnetContracts config BetRef.suite
+      $group "bet-ref example" do
+          testTestnetContracts config BetRef.placeBetSuite
+          testTestnetContracts config BetRef.takePotSuite
+      -- $group "bet-ref example - take bet" do
+      -- $ group "cardano-testnet" do
 --           testTestnetContracts config Mnemonics.suite
 --           group "ExUnits - normal limits" do
 --             testTestnetContracts config $ ExUnits.mkFailingSuite 8000

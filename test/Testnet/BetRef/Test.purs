@@ -1,5 +1,6 @@
 module Test.Ctl.Testnet.BetRef.Test
-  ( suite
+  ( placeBetSuite
+  , takePotSuite
   ) where
 
 import Contract.Prelude hiding (apply)
@@ -94,14 +95,17 @@ import Test.Ctl.Testnet.BetRef.Types
   )
 import Test.Spec.Assertions (shouldEqual, shouldSatisfy)
 
-suite :: TestPlanM ContractTest Unit
-suite = do
-  -- test "Placing first bet" firstBetTest'
-  -- test "Multiple bets - good steps" multipleBetsTest
-  -- test "Multiple bets - to small step" failingMultipleBetsTest
+placeBetSuite :: TestPlanM ContractTest Unit
+placeBetSuite = do
+  test "Placing first bet" firstBetTest'
+  test "Multiple bets - good steps" multipleBetsTest
+  test "Multiple bets - to small step" failingMultipleBetsTest
+
+takePotSuite :: TestPlanM ContractTest Unit
+takePotSuite = do
   test "Just take bet pot" takeBetsTest
-  -- test "Take by wrong guesser" wrongGuesserTakeBetsTest
-  -- test "The first bet matters" badUpdatedGuessTakeBetsTest
+  test "Take by wrong guesser" wrongGuesserTakeBetsTest
+  test "The first bet matters" badUpdatedGuessTakeBetsTest
 
 -- -----------------------------------------------------------------------------
 -- Place bids
