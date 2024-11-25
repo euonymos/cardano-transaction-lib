@@ -1,18 +1,15 @@
-module Test.Ctl.Testnet.BetRef.Test
-  ( placeBetSuite
+module Test.Ctl.BetRef.Test
+  ( multipleBetsWallets
+  , placeBetSuite
   , takePotSuite
   ) where
 
-import Contract.Prelude hiding (apply)
-import Prelude
-
 import Cardano.Types (Transaction, TransactionHash, _body, _fee)
-import Cardano.Types.BigNum (BigNum)
 import Cardano.Types.BigNum as BigNum
+import Cardano.Types.Coin (Coin(Coin))
 import Cardano.Types.Credential
   ( Credential(PubKeyHashCredential, ScriptHashCredential)
   )
-import Cardano.Types.OutputDatum (OutputDatum(OutputDatum))
 import Cardano.Types.PlutusScript (PlutusScript, hash)
 import Cardano.Types.ScriptHash (ScriptHash)
 import Cardano.Types.ScriptRef (ScriptRef(PlutusScriptRef), getPlutusScript)
@@ -35,9 +32,22 @@ import Contract.Chain (currentSlot, waitUntilSlot)
 import Contract.Log (logInfo')
 import Contract.Monad (Contract)
 import Contract.PlutusData (PlutusData, toData)
-import Contract.ScriptLookups (ScriptLookups)
-import Contract.ScriptLookups (validator)
-import Contract.Scripts (validatorHash)
+import Contract.Prelude
+  ( type (/\)
+  , Either(Left, Right)
+  , Maybe(Nothing, Just)
+  , for
+  , isRight
+  , liftAff
+  , liftEffect
+  , liftEither
+  , liftM
+  , mconcat
+  , unwrap
+  , wrap
+  , (/\)
+  )
+import Contract.ScriptLookups (ScriptLookups, validator)
 import Contract.Test (ContractTest, InitialUTxOs, withKeyWallet, withWallets)
 import Contract.Test.Assert
   ( checkLossAtAddress
@@ -55,40 +65,54 @@ import Contract.Transaction
   )
 import Contract.TxConstraints
   ( DatumPresence(DatumInline)
+  , TxConstraints
   , mustPayToPubKeyWithDatum
   , mustPayToPubKeyWithScriptRef
   )
-import Contract.TxConstraints
-  ( TxConstraints
-  )
 import Contract.UnbalancedTx (mkUnbalancedTx)
 import Contract.Utxos (utxosAt)
-import Contract.Value (Value, add, empty, lovelaceValueOf, minus)
+import Contract.Value (Value, empty, lovelaceValueOf, valueToCoin)
 import Control.Monad.Error.Class (liftMaybe, throwError)
 import Control.Monad.Trans.Class (lift)
-import Ctl.Examples.ExUnits as ExUnits
 import Ctl.Internal.Contract.Monad (getQueryHandle)
 import Ctl.Internal.Service.Error (pprintClientError)
 import Data.Array (cons, fromFoldable, head, uncons, zip)
 import Data.Bifunctor (lmap)
 import Data.Either (isLeft)
 import Data.Lens (view)
-import Data.List as List
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (fromJust)
 import Data.Set as Set
-import Data.Unit (unit)
-import Effect.Aff (try)
+import Debug (trace)
 import Effect.Exception (error, throw)
 import JS.BigInt (BigInt)
 import JS.BigInt as BigInt
 import Mote (test)
 import Mote.TestPlanM (TestPlanM)
 import Partial.Unsafe (unsafePartial)
-import Test.Ctl.Testnet.BetRef.BetRefValidator (mkScript)
-import Test.Ctl.Testnet.BetRef.Operations (placeBet, takePot)
-import Test.Ctl.Testnet.BetRef.Types
+import Prelude
+  ( Unit
+  , bind
+  , discard
+  , flip
+  , map
+  , mempty
+  , pure
+  , show
+  , unit
+  , (#)
+  , ($)
+  , (&&)
+  , (+)
+  , (<$>)
+  , (<<<)
+  , (<>)
+  , (==)
+  )
+import Test.Ctl.BetRef.BetRefValidator (mkScript)
+import Test.Ctl.BetRef.Operations (placeBet, takePot)
+import Test.Ctl.BetRef.Types
   ( BetRefParams
   , OracleAnswerDatum(OracleAnswerDatum)
   , mkParams
@@ -165,8 +189,14 @@ failingMultipleBetsTest = withWallets multipleBetsWallets $
 -- helpers for multiple bet tests
 -- -----------------------------------------------------------------------------
 
+mkGuess :: Int -> OracleAnswerDatum
 mkGuess = OracleAnswerDatum <<< BigInt.fromInt
 
+multipleBetsWallets
+  :: InitialUTxOs /\ InitialUTxOs /\ InitialUTxOs /\ InitialUTxOs
+       /\ InitialUTxOs
+       /\ InitialUTxOs
+       /\ InitialUTxOs
 multipleBetsWallets =
   [ BigNum.fromInt 500_000_000 ] -- oracle
 
@@ -227,7 +257,7 @@ mkMultipleBetsTest
   getBalance
     :: Array (PaymentPubKeyHash /\ OracleAnswerDatum /\ Int)
     -> Contract (Array Value)
-  getBalance bets = for (unsafePartial $ walletsAndBets bets) $ \(pkh /\ _) ->
+  getBalance bets' = for (unsafePartial $ walletsAndBets bets') $ \(pkh /\ _) ->
     do
       addr <- mkAddress' pkh Nothing
       queryHandle <- getQueryHandle
@@ -251,12 +281,12 @@ mkMultipleBetsTest
   -- i.e., wallet for whose we haven't yet computed value lost,
   -- we calculate the total once so we can ignore other entries
   -- for this wallet.
-  -- FIXME: very ineffective, can be simplified drastically.
+  -- FIXME: mention that we are working with positive values
   walletsAndBets
     :: Partial
     => Array (PaymentPubKeyHash /\ OracleAnswerDatum /\ Int)
     -> Array (PaymentPubKeyHash /\ Value)
-  walletsAndBets bets = go bets Set.empty []
+  walletsAndBets bets' = go bets' Set.empty []
     where
     go allBets set acc = case uncons allBets of
       Just { head: bet, tail: remBets } ->
@@ -282,11 +312,9 @@ mkMultipleBetsTest
       let
         bet' = lovelaceValueOf $ BigNum.fromInt bet
       in
-        if wallet' == wallet then fromJust (acc `Value.add` bet')
-        else fromJust (Value.empty `Value.minus` acc)
-
-  negate :: BigNum -> Maybe BigNum
-  negate n = BigNum.zero `BigNum.sub` n
+        totalBets wallet remBets $
+          if wallet' == wallet then fromJust (acc `Value.add` bet')
+          else acc
 
   -- \| Function to verify that the wallet indeed lost by /roughly/ the bet amount.
   -- We say /roughly/ as fees is assumed to be within (0, 1 ada].
@@ -294,16 +322,21 @@ mkMultipleBetsTest
     :: Array ((PaymentPubKeyHash /\ Value) /\ Value /\ Value) -> Contract Unit
   verify es = case uncons es of
     Nothing -> pure unit
-    Just { head: ((pkh /\ diff) /\ vBefore /\ vAfter), tail: es } -> do
+    Just { head: ((pkh /\ diff) /\ vBefore /\ vAfter), tail: rest } -> do
+      -- logInfo' $ "diff: " <> show diff
+      -- logInfo' $ "vBefore: " <> show vBefore
+      -- logInfo' $ "vAfter: " <> show vAfter
       let
-        vAfterWithoutFees = unsafePartial $ fromJust $ vBefore `Value.add` diff
+        vAfterWithoutFees = unsafePartial $ fromJust $ vBefore `Value.minus`
+          diff
         threshold = lovelaceValueOf $ BigNum.fromInt 1_500_000 -- 1.5 ada
       if
         vAfter `Value.lt` vAfterWithoutFees
           &&
-            ( unsafePartial $ fromJust $ vAfterWithoutFees `Value.minus`
-                threshold
-            ) `Value.geq` vAfter then verify es
+            vAfter `Value.geq`
+              ( unsafePartial $ fromJust $ vAfterWithoutFees `Value.minus`
+                  threshold
+              ) then verify rest
       else
         throwError $ error $ "For wallet " <> show pkh
           <> " expected value (without fees) "

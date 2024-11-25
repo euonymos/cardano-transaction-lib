@@ -1,17 +1,13 @@
-module Test.Ctl.Testnet.BetRef.Types where
+module Test.Ctl.BetRef.Types where
 
 import Contract.Prelude
-import Prelude
 
 import Cardano.Plutus.DataSchema
   ( class HasPlutusSchema
-  , class UniqueIndices
   , type (:+)
   , type (:=)
   , type (@@)
-  , ConsI
   , I
-  , NilI
   , PNil
   , S
   , Z
@@ -34,13 +30,14 @@ import Contract.Time
   , slotToPosixTime
   )
 import Contract.Value (Value)
-import Control.Monad.Error.Class (liftEither, liftMaybe)
+import Control.Monad.Error.Class (liftMaybe)
 import Ctl.Internal.Types.Interval (POSIXTime)
 import Data.Bifunctor (lmap)
 import Data.List (List)
 import Effect.Exception (error)
 import JS.BigInt (BigInt)
 import JS.BigInt as BigInt
+import Prelude (class Eq, class Show, bind, pure, show, ($), (+), (<$>), (<<<))
 
 -- | Goals made my the concerned team.
 type TeamGoals = BigInt

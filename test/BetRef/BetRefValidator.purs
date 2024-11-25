@@ -1,4 +1,4 @@
-module Test.Ctl.Testnet.BetRef.BetRefValidator
+module Test.Ctl.BetRef.BetRefValidator
   ( mkScript
   ) where
 
@@ -18,7 +18,7 @@ import Ctl.Internal.Cardano.TextEnvelope
   )
 import Data.Array (singleton) as Array
 import Effect.Exception (error)
-import Test.Ctl.Testnet.BetRef.Types (BetRefParams)
+import Test.Ctl.BetRef.Types (BetRefParams)
 
 foreign import betRefValidator :: String
 

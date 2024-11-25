@@ -2,8 +2,7 @@ module Contract.Test.Testnet
   ( defaultClusterConfig
   , defaultTestnetConfig
   , module X
-  )
-  where
+  ) where
 
 import Contract.Monad (runContractInEnv) as X
 import Contract.Wallet (withKeyWallet) as X
@@ -40,7 +39,11 @@ import Ctl.Internal.Testnet.Types
       )
   , TestnetConfig
   ) as X
-import Ctl.Internal.Testnet.Types (Era(Conway), TestnetConfig, TestnetClusterConfig)
+import Ctl.Internal.Testnet.Types
+  ( Era(Conway)
+  , TestnetClusterConfig
+  , TestnetConfig
+  )
 import Data.Log.Level (LogLevel(Trace))
 import Data.Maybe (Maybe(Nothing))
 import Data.Time.Duration (Seconds(Seconds))
@@ -67,12 +70,11 @@ defaultTestnetConfig =
   , clusterConfig: defaultClusterConfig
   }
 
-
 defaultClusterConfig :: TestnetClusterConfig
 defaultClusterConfig =
-    { testnetMagic: 2
-    , era: Conway
-    , slotLength: Seconds 0.1
-    , epochSize: Nothing
-    }
+  { testnetMagic: 2
+  , era: Conway
+  , slotLength: Seconds 0.1
+  , epochSize: Nothing
+  }
 

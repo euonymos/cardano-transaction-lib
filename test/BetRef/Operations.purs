@@ -1,65 +1,59 @@
-module Test.Ctl.Testnet.BetRef.Operations
+module Test.Ctl.BetRef.Operations
   ( placeBet
   , takePot
   ) where
 
-import Contract.Prelude
-import Prelude
-
 import Cardano.FromData (fromData)
 import Cardano.Plutus.Types.Value as Value
 import Cardano.Types
-  ( Credential(ScriptHashCredential)
-  , OutputDatum(OutputDatum)
-  , PaymentCredential(PaymentCredential)
-  , PaymentPubKeyHash
+  ( PaymentPubKeyHash
   , Transaction
   )
-import Cardano.Types.Address (getPaymentCredential)
-import Cardano.Types.Credential (asPubKeyHash)
 import Cardano.Types.OutputDatum (outputDatumDatum)
 import Cardano.Types.PlutusScript (PlutusScript, hash)
 import Cardano.Types.RedeemerDatum (RedeemerDatum(RedeemerDatum))
 import Cardano.Types.TransactionUnspentOutput
   ( TransactionUnspentOutput(TransactionUnspentOutput)
   )
-import Contract.Address (Address, mkAddress)
 import Contract.Log (logDebug', logInfo')
 import Contract.Monad (Contract)
 import Contract.PlutusData (toData)
-import Contract.ScriptLookups (ScriptLookups)
-import Contract.ScriptLookups (unspentOutputs, validator)
+import Contract.Prelude
+  ( type (/\)
+  , Maybe(Just, Nothing)
+  , mconcat
+  , unwrap
+  , wrap
+  , (/\)
+  )
+import Contract.ScriptLookups (ScriptLookups, unspentOutputs, validator)
 import Contract.Time (POSIXTimeRange)
 import Contract.Transaction
   ( TransactionInput
-  , TransactionOutput(TransactionOutput)
   , balanceTx
-  , buildTx
   )
 import Contract.TxConstraints
   ( DatumPresence(DatumInline)
   , InputWithScriptRef(RefInput)
   , TxConstraints
-  )
-import Contract.TxConstraints
-  ( mustBeSignedBy
+  , mustBeSignedBy
   , mustPayToScript
   , mustReferenceOutput
   , mustSpendScriptOutputUsingScriptRef
   , mustValidateIn
   )
 import Contract.UnbalancedTx (mkUnbalancedTx)
-import Contract.Utxos (getUtxo, utxosAt)
+import Contract.Utxos (getUtxo)
 import Contract.Value (Value, add)
 import Control.Monad.Error.Class (liftMaybe)
 import Ctl.Internal.Types.Interval as Interval
 import Data.List (List, singleton)
 import Data.Map as Map
 import Data.Maybe (Maybe)
-import Data.Unit (Unit, unit)
 import Effect.Exception (error)
 import JS.BigInt as BigInt
-import Test.Ctl.Testnet.BetRef.Types
+import Prelude (bind, discard, mempty, pure, show, ($), (-), (<>), (=<<), (>>=))
+import Test.Ctl.BetRef.Types
   ( BetRefAction(Bet, Take)
   , BetRefDatum(BetRefDatum)
   , BetRefParams
