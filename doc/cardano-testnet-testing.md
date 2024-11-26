@@ -25,7 +25,25 @@
 
 ## Overview
 
-[`cardano-testnet`](https://github.com/IntersectMBO/cardano-node/tree/master/cardano-testnet) is a tool for spinning up temporary local testnets. CTL integrates with it to provide an environment for `Contract` testing, that is very close to production.
+Traditionally, when testing dApps on Cardano, developers start with unit-testing separate on-chain scripts
+and then move to testing whole transactions. To do this a running ledger is needed.
+Currently, CTL provides two options which are discussed here in detail.
+
+The first option is a Cardano emulator [CLB](https://github.com/mlabs-haskell/clb) that can pretend 
+to be a standalone Cardano node without notions of consensus and network interactions. 
+It is fast, lightweight, and provides a basic ledger that can be accessed through an IPC socket.
+
+The second option is a private network, that runs a set of real-cardano nodes. 
+This is slower and consumes more resources, but represents a more realistic environment.
+
+In most cases, it makes sense to start using the emulator and switch to a private network
+as soon as tests necessitate features that are not supported by the emulator.
+
+Fortunately, CTL allows you to do that easily, since both approaches leverage 
+the same spinning-up mechanism, namely 
+[`cardano-testnet`](https://github.com/IntersectMBO/cardano-node/tree/master/cardano-testnet) 
+It is a  tool for spinning up temporary local testnets. 
+CTL integrates with it to provide an environment for `Contract` testing, that is very close to production.
 
 ## Architecture
 
