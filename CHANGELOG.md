@@ -86,11 +86,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ## Unreleased version
 
-- [CLB emulator](https://github.com/mlabs-haskell/clb) added so you can use it instead of
-`cardano-node` within `cardano-testnet` in test cases whern emulator's features are enough.
-- TODO: implement bt-ref example
-- TODO: add a flag to choose between cardano-node and clb
-- TODO: Fix red testnet tests:
+- [CLB emulator](https://github.com/mlabs-haskell/clb) was added as a more lightweight testnet option
+- Betting example from Atlas (known as "bet-ref") was reimplemented in CTL to showcase CLB tests
+- FIXME: Some tests from the testnet suite are still red when being run against CLB:
   * Get ChainTip
   * wait for slot far in the future
   * Getting transaction metadata
@@ -98,7 +96,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   * acquireMempoolSnapshot
   * fetchMempoolTXs
   * mempoolSnapshotSizeAndCapacity
-
 
 ## [v9.3.1]
 
