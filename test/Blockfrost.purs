@@ -22,7 +22,7 @@ import Contract.Transaction
   , TransactionHash(TransactionHash)
   )
 import Control.Monad.Error.Class (liftEither)
-import Ctl.Internal.Contract.QueryBackend (BlockfrostBackend)
+import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend)
 import Ctl.Internal.Helpers (liftedM)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM

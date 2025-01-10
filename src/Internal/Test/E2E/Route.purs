@@ -23,7 +23,7 @@ import Contract.Wallet
 import Contract.Wallet.Key (privateKeysToKeyWallet)
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (liftMaybe)
-import Ctl.Internal.Contract.QueryBackend (mkCtlBackendParams)
+import Ctl.Internal.Contract.ProviderBackend (mkCtlBackendParams)
 import Ctl.Internal.Helpers (liftEither)
 import Ctl.Internal.QueryM (ClusterSetup)
 import Ctl.Internal.Test.E2E.Feedback.Browser (getClusterSetupRepeatedly)

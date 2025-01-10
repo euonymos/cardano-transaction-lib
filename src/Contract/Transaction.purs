@@ -96,9 +96,9 @@ import Ctl.Internal.Contract.AwaitTxConfirmed
   , isTxConfirmed
   ) as X
 import Ctl.Internal.Contract.MinFee (calculateMinFee) as X
-import Ctl.Internal.Contract.Monad (getQueryHandle)
-import Ctl.Internal.Contract.QueryHandle.Error (GetTxMetadataError)
-import Ctl.Internal.Contract.QueryHandle.Error
+import Ctl.Internal.Contract.Monad (getProvider)
+import Ctl.Internal.Contract.Provider.Error (GetTxMetadataError)
+import Ctl.Internal.Contract.Provider.Error
   ( GetTxMetadataError
       ( GetTxMetadataTxNotFoundError
       , GetTxMetadataMetadataEmptyOrMissingError
@@ -171,8 +171,8 @@ submitE
   :: Transaction
   -> Contract (Either ClientError TransactionHash)
 submitE tx = do
-  queryHandle <- getQueryHandle
-  eiTxHash <- liftAff $ queryHandle.submitTx tx
+  provider <- getProvider
+  eiTxHash <- liftAff $ provider.submitTx tx
   void $ asks (_.hooks >>> _.onSubmit) >>=
     traverse \hook -> liftEffect $ void $ try $ hook tx
   pure eiTxHash
@@ -322,8 +322,8 @@ getTxAuxiliaryData
   :: TransactionHash
   -> Contract (Either GetTxMetadataError AuxiliaryData)
 getTxAuxiliaryData txHash = do
-  queryHandle <- getQueryHandle
-  liftAff $ queryHandle.getTxAuxiliaryData txHash
+  provider <- getProvider
+  liftAff $ provider.getTxAuxiliaryData txHash
 
 -- | Builds an expected utxo set from transaction outputs. Predicts output
 -- | references (`TransactionInput`s) for each output by calculating the

@@ -69,7 +69,7 @@ import Control.Monad.Reader.Class (asks)
 import Control.Monad.State.Trans (get, gets, put, runStateT)
 import Control.Monad.Trans.Class (lift)
 import Ctl.Internal.Contract (getProtocolParameters)
-import Ctl.Internal.Contract.Monad (Contract, getQueryHandle, wrapQueryM)
+import Ctl.Internal.Contract.Monad (Contract, getProvider, wrapQueryM)
 import Ctl.Internal.Helpers (liftEither, liftM, unsafeFromJust)
 import Ctl.Internal.ProcessConstraints.Error
   ( MkUnbalancedTxError
@@ -494,13 +494,13 @@ processConstraint
 processConstraint
   ctx@{ plutusMintingPolicies, plutusScripts }
   c = do
-  queryHandle <- lift $ getQueryHandle
+  provider <- lift $ getProvider
   case c of
     MustIncludeDatum dat -> pure <$> addDatum dat
     MustValidateIn posixTimeRange -> do
       { systemStart } <- asks _.ledgerConstants
       eraSummaries <- liftAff $
-        queryHandle.getEraSummaries
+        provider.getEraSummaries
           >>= either (liftEffect <<< throw <<< show) pure
       runExceptT do
         ({ timeToLive, validityStartInterval }) <- liftEither $
@@ -556,7 +556,7 @@ processConstraint
                   if isRight mDatumLookup then
                     pure mDatumLookup
                   else
-                    liftAff $ queryHandle.getDatumByHash dHash <#> hush
+                    liftAff $ provider.getDatumByHash dHash <#> hush
                       >>> Bind.join
                       >>> note
                         (CannotQueryDatum dHash)

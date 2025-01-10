@@ -16,8 +16,8 @@ module Ctl.Internal.Contract.Monad
   , buildBackend
   , getLedgerConstants
   , filterLockedUtxos
-  , getQueryHandle
-  , mkQueryHandle
+  , getProvider
+  , mkProvider
   ) where
 
 import Prelude
@@ -39,19 +39,19 @@ import Control.Parallel (class Parallel, parallel, sequential)
 import Control.Plus (class Plus)
 import Ctl.Internal.Contract.Hooks (Hooks)
 import Ctl.Internal.Contract.LogParams (LogParams)
-import Ctl.Internal.Contract.QueryBackend
+import Ctl.Internal.Contract.Provider
+  ( providerForBlockfrostBackend
+  , providerForCtlBackend
+  , providerForSelfHostedBlockfrostBackend
+  )
+import Ctl.Internal.Contract.Provider.Type (Provider)
+import Ctl.Internal.Contract.ProviderBackend
   ( CtlBackend
   , CtlBackendParams
-  , QueryBackend(BlockfrostBackend, CtlBackend)
-  , QueryBackendParams(BlockfrostBackendParams, CtlBackendParams)
+  , ProviderBackend(BlockfrostBackend, CtlBackend)
+  , ProviderBackendParams(BlockfrostBackendParams, CtlBackendParams)
   , getCtlBackend
   )
-import Ctl.Internal.Contract.QueryHandle
-  ( queryHandleForBlockfrostBackend
-  , queryHandleForCtlBackend
-  , queryHandleForSelfHostedBlockfrostBackend
-  )
-import Ctl.Internal.Contract.QueryHandle.Type (QueryHandle)
 import Ctl.Internal.Helpers (filterMapWithKeyM, liftM, logWithLevel)
 import Ctl.Internal.JsWebSocket (_wsClose, _wsFinalize)
 import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
@@ -183,8 +183,8 @@ type LedgerConstants =
 -- | to run. It is recommended to use one environment per application to save
 -- | on websocket connections and to keep track of `UsedTxOuts`.
 type ContractEnv =
-  { backend :: QueryBackend
-  , handle :: QueryHandle
+  { backend :: ProviderBackend
+  , provider :: Provider
   , networkId :: NetworkId
   , logLevel :: LogLevel
   , customLogger :: Maybe (LogLevel -> Message -> Aff Unit)
@@ -200,19 +200,19 @@ type ContractEnv =
       }
   }
 
-getQueryHandle :: Contract QueryHandle
-getQueryHandle = asks _.handle
+getProvider :: Contract Provider
+getProvider = asks _.provider
 
-mkQueryHandle
-  :: forall (rest :: Row Type). LogParams rest -> QueryBackend -> QueryHandle
-mkQueryHandle params queryBackend =
-  case queryBackend of
+mkProvider
+  :: forall (rest :: Row Type). LogParams rest -> ProviderBackend -> Provider
+mkProvider params providerBackend =
+  case providerBackend of
     CtlBackend ctlBackend _ ->
-      queryHandleForCtlBackend runQueryM params ctlBackend
+      providerForCtlBackend runQueryM params ctlBackend
     BlockfrostBackend blockfrostBackend Nothing -> do
-      queryHandleForBlockfrostBackend params blockfrostBackend
+      providerForBlockfrostBackend params blockfrostBackend
     BlockfrostBackend blockfrostBackend (Just ctlBackend) -> do
-      queryHandleForSelfHostedBlockfrostBackend params blockfrostBackend
+      providerForSelfHostedBlockfrostBackend params blockfrostBackend
         runQueryM
         ctlBackend
 
@@ -233,7 +233,7 @@ mkContractEnv params = do
       backend <- buildBackend logger params.backendParams
       ledgerConstants <- getLedgerConstants params backend
       pure $ merge
-        { backend, ledgerConstants, handle: mkQueryHandle params backend }
+        { backend, ledgerConstants, provider: mkProvider params backend }
     b2 <- parallel do
       wallet <- buildWallet
       pure $ merge { wallet }
@@ -261,7 +261,7 @@ mkContractEnv params = do
     , hooks: params.hooks
     }
 
-buildBackend :: Logger -> QueryBackendParams -> Aff QueryBackend
+buildBackend :: Logger -> ProviderBackendParams -> Aff ProviderBackend
 buildBackend logger = case _ of
   CtlBackendParams ctlParams blockfrostParams ->
     flip CtlBackend blockfrostParams <$> buildCtlBackend ctlParams
@@ -287,7 +287,7 @@ getLedgerConstants
      , customLogger :: Maybe (LogLevel -> Message -> Aff Unit)
      | r
      }
-  -> QueryBackend
+  -> ProviderBackend
   -> Aff LedgerConstants
 getLedgerConstants params = case _ of
   CtlBackend { ogmios: { ws } } _ ->
@@ -420,7 +420,7 @@ type ContractSynchronizationParams =
 -- | `ContractEnv` environment, or use `withContractEnv` if your application
 -- | contains multiple contracts that can reuse the same environment.
 type ContractParams =
-  { backendParams :: QueryBackendParams
+  { backendParams :: ProviderBackendParams
   , networkId :: NetworkId
   , logLevel :: LogLevel
   , walletSpec :: Maybe WalletSpec

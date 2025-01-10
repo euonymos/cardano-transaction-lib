@@ -46,7 +46,7 @@ import Ctl.Internal.BalanceTx.Types
   , liftContract
   )
 import Ctl.Internal.Contract.MinFee (calculateMinFee) as Contract.MinFee
-import Ctl.Internal.Contract.Monad (getQueryHandle)
+import Ctl.Internal.Contract.Monad (getProvider)
 import Ctl.Internal.Helpers (liftEither, unsafeFromJust)
 import Ctl.Internal.QueryM.Ogmios
   ( AdditionalUtxoSet
@@ -103,10 +103,10 @@ evalTxExecutionUnits tx = do
 
   worker :: Ogmios.AdditionalUtxoSet -> BalanceTxM Ogmios.TxEvaluationResult
   worker additionalUtxos = do
-    queryHandle <- liftContract getQueryHandle
+    provider <- liftContract getProvider
     evalResult <-
       unwrap <$> liftContract
-        (liftAff $ queryHandle.evaluateTx tx additionalUtxos)
+        (liftAff $ provider.evaluateTx tx additionalUtxos)
     case evalResult of
       Right a -> pure a
       Left (Ogmios.AdditionalUtxoOverlap overlappingUtxos) ->

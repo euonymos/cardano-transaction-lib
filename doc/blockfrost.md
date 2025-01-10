@@ -3,25 +3,26 @@
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
-- [Setting up a Blockfrost-powered test suite](#setting-up-a-blockfrost-powered-test-suite)
-  - [Getting an API key](#getting-an-api-key)
-  - [Generating private keys](#generating-private-keys)
-  - [Funding your address](#funding-your-address)
-  - [Setting up a directory for temporary keys](#setting-up-a-directory-for-temporary-keys)
-  - [Providing an API endpoint URL](#providing-an-api-endpoint-url)
-  - [Setting Tx confirmation delay](#setting-tx-confirmation-delay)
-  - [Test suite setup on PureScript side](#test-suite-setup-on-purescript-side)
-- [Running `Contract`s with Blockfrost](#running-contracts-with-blockfrost)
-- [Running Blockfrost locally](#running-blockfrost-locally)
-  - [Configuration](#configuration)
-    - [Contract parameters](#contract-parameters)
-    - [Test suite](#test-suite)
-  - [Synchronization](#synchronization)
-- [Limitations](#limitations)
-  - [Performance](#performance)
-  - [Transaction chaining](#transaction-chaining)
-  - [Getting pool parameters](#getting-pool-parameters)
-- [See also](#see-also)
+- [Blockfrost backend](#blockfrost-backend)
+  - [Setting up a Blockfrost-powered test suite](#setting-up-a-blockfrost-powered-test-suite)
+    - [Getting an API key](#getting-an-api-key)
+    - [Generating private keys](#generating-private-keys)
+    - [Funding your address](#funding-your-address)
+    - [Setting up a directory for temporary keys](#setting-up-a-directory-for-temporary-keys)
+    - [Providing an API endpoint URL](#providing-an-api-endpoint-url)
+    - [Setting Tx confirmation delay](#setting-tx-confirmation-delay)
+    - [Test suite setup on PureScript side](#test-suite-setup-on-purescript-side)
+  - [Running `Contract`s with Blockfrost](#running-contracts-with-blockfrost)
+  - [Running Blockfrost locally](#running-blockfrost-locally)
+    - [Configuration](#configuration)
+      - [Contract parameters](#contract-parameters)
+      - [Test suite](#test-suite)
+    - [Synchronization](#synchronization)
+  - [Limitations](#limitations)
+    - [Performance](#performance)
+    - [Transaction chaining](#transaction-chaining)
+    - [Getting pool parameters](#getting-pool-parameters)
+  - [See also](#see-also)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -132,7 +133,7 @@ See [this example](../test/Blockfrost/Contract.purs), which can be executed with
 
 On production, the environment should be configured on PureScript side (environment variables are not respected).
 
-`mkBlockfrostBackendParams` can be called on a populated `BlockfrostBackendParams` record to create a `QueryBackendParams` value. `backendParams` field of `ContractParams` uses a value of this type. And `ContractParams` can in turn be used with `runContract`.
+`mkBlockfrostBackendParams` can be called on a populated `BlockfrostBackendParams` record to create a `ProviderBackendParams` value. `backendParams` field of `ContractParams` uses a value of this type. And `ContractParams` can in turn be used with `runContract`.
 
 ```purescript
 type BlockfrostBackendParams =

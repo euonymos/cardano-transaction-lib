@@ -23,7 +23,7 @@ import Contract.Log (logInfo')
 import Contract.Monad (Contract, liftContractM, liftedE)
 import Control.Monad.Reader.Class (asks)
 import Ctl.Internal.Contract (getChainTip)
-import Ctl.Internal.Contract.Monad (getQueryHandle)
+import Ctl.Internal.Contract.Monad (getProvider)
 import Ctl.Internal.Helpers (liftM)
 import Ctl.Internal.QueryM.Ogmios (CurrentEpoch(CurrentEpoch))
 import Ctl.Internal.QueryM.Ogmios
@@ -173,8 +173,8 @@ normalizeTimeInterval = case _ of
 -- | Get the current Epoch.
 getCurrentEpoch :: Contract Epoch
 getCurrentEpoch = do
-  queryHandle <- getQueryHandle
-  CurrentEpoch bigNum <- liftAff $ queryHandle.getCurrentEpoch
+  provider <- getProvider
+  CurrentEpoch bigNum <- liftAff $ provider.getCurrentEpoch
   map Epoch $ liftM (error "Unable to convert CurrentEpoch")
     $ UInt.fromString
     $ BigNum.toString (bigNum :: BigNum)
@@ -187,8 +187,8 @@ getCurrentEpoch = do
 -- | https://docs.blockfrost.io/#tag/Cardano-Network/paths/~1network~1eras/get
 getEraSummaries :: Contract EraSummaries
 getEraSummaries = do
-  queryHandle <- getQueryHandle
-  liftedE $ liftAff $ queryHandle.getEraSummaries
+  provider <- getProvider
+  liftedE $ liftAff $ provider.getEraSummaries
 
 -- | Get the current system start time.
 getSystemStart :: Contract SystemStart

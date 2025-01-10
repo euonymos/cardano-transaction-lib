@@ -32,7 +32,7 @@ import Cardano.Types.PlutusScript as PlutusScript
 import Cardano.Types.ScriptRef (ScriptRef)
 import Contract.Monad (Contract)
 import Control.Parallel (parTraverse)
-import Ctl.Internal.Contract.Monad (getQueryHandle)
+import Ctl.Internal.Contract.Monad (getProvider)
 import Ctl.Internal.Service.Error (ClientError)
 import Data.Either (Either)
 import Data.Map (Map)
@@ -45,17 +45,17 @@ import Prim.TypeError (class Warn, Text)
 -- | Retrieve a `ScriptRef` given the hash
 getScriptByHash :: ScriptHash -> Contract (Either ClientError (Maybe ScriptRef))
 getScriptByHash hash = do
-  queryHandle <- getQueryHandle
-  liftAff $ queryHandle.getScriptByHash hash
+  provider <- getProvider
+  liftAff $ provider.getScriptByHash hash
 
 -- | Retrieve `ScriptRef`s given their hashes
 getScriptsByHashes
   :: Array ScriptHash
   -> Contract (Map ScriptHash (Either ClientError (Maybe ScriptRef)))
 getScriptsByHashes hashes = do
-  queryHandle <- getQueryHandle
+  provider <- getProvider
   liftAff $ Map.fromFoldable <$> flip parTraverse hashes
-    \sh -> queryHandle.getScriptByHash sh <#> Tuple sh
+    \sh -> provider.getScriptByHash sh <#> Tuple sh
 
 -- | Deprecated. Use `Cardano.Types.PlutusScript`
 type Validator = PlutusScript
