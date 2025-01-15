@@ -38,11 +38,11 @@ Make sure to perform **all** of the following steps, otherwise you **will** enco
 2. **Update your PureScript dependencies**
 
 - Make sure to set `upstream` to our PureScript package set in `packages.dhall`
-  
+
   - Simply copy it from the CTL's `packages.dhall` at the correct revision
   - This package set should include all the necessary Cardano domain packages, so you no longer need to keep track of the individual PureScript dependencies with each CTL update, as was required previously
   - Your `upstream` should look like this:
-    
+
     ```dhall
     let upstream =
       https://raw.githubusercontent.com/mlabs-haskell/purescript-cardano-package-set/<version>/packages.dhall
