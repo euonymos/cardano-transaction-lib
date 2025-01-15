@@ -91,6 +91,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ### Changed
 
 - `cardano-serialization-lib` has been updated to `v13.2.0` ([#1656](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1656))
+- Switched to the [purescript-cardano-package-set](https://github.com/mlabs-haskell/purescript-cardano-package-set) in `packages.dhall` (see the [section on updating PureScript dependencies in the docs](./doc/ctl-as-dependency.md)) ([#1667](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1667))
 
 ### Fixed
 
