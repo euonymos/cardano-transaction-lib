@@ -67,7 +67,7 @@ Make sure to perform **all** of the following steps, otherwise you **will** enco
 
 3. **Update your JS dependencies**
 
-- The NPM dependencies your project has must have the exact same versions CTL's own `package.json` specifies.
+- CTL currently has a single aggregate or meta NPM dependency that encompasses all other dependencies: `@mlabs-haskell/ctl-npm-meta`. Your project must use **the exact same version** of this dependency as specified in CTL's `package.json`.
 - You have to update `package-lock.json` by running `npm install`. If you are in a nix shell and use our setup that symlinks `./node_modules`, npm will complain about inability to write to the filesystem, use `npm i --package-lock-only` to skip writing to `node_modules`. If your `node_modules` are managed by Nix, you will have to re-enter the shell for the changes to apply.
 
 4. **Update your webpack/esbuild config**
