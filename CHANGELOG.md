@@ -92,11 +92,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 - `cardano-serialization-lib` has been updated to `v13.2.0` ([#1656](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1656))
 - Switched to the [purescript-cardano-package-set](https://github.com/mlabs-haskell/purescript-cardano-package-set) in `packages.dhall` (see the [section on updating PureScript dependencies in the docs](./doc/ctl-as-dependency.md)) ([#1667](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1667))
+- Switched to the aggregate `@mlabs-haskell/ctl-npm-meta` package for NPM dependencies (see the [section on updating JS dependencies in the docs](./doc/ctl-as-dependency.md)) ([#1666](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1666))
 
 ### Fixed
 
 - Fixed transaction witness set 'attach' functions. Previously, the updated witness set was incorrectly appended to the existing set, causing performance degradation when processing constraints for complex transactions. ([#1653](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1653))
 - Updating to CSL `v13.2.0` should resolve the issue of occasional transaction script integrity hash mismatches on tx submission ([#1656](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1656))
+- Fixed a critical bug where Blockfrost `getUtxo` would also return **spent** outputs ([#1664](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1664))
 
 ## [v9.3.1]
 
