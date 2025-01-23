@@ -93,6 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - `cardano-serialization-lib` has been updated to `v13.2.0` ([#1656](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1656))
 - Switched to the [purescript-cardano-package-set](https://github.com/mlabs-haskell/purescript-cardano-package-set) in `packages.dhall` (see the [section on updating PureScript dependencies in the docs](./doc/ctl-as-dependency.md)) ([#1667](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1667))
 - Switched to the aggregate `@mlabs-haskell/ctl-npm-meta` package for NPM dependencies (see the [section on updating JS dependencies in the docs](./doc/ctl-as-dependency.md)) ([#1666](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1666))
+- Ignore **any** tx evaluation errors if tx marked invalid. Previously, certain internal evaluation errors were not properly handled, leading to unexpected behavior for a subset of explicitly marked "invalid" transactions. ([#1668](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1668))
 
 ### Fixed
 
