@@ -91,7 +91,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ### Changed
 
 - `cardano-serialization-lib` has been updated to `v13.2.0` ([#1656](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1656))
-- `QueryHandle` has been renamed to `Provider`
+- `QueryHandle` has been renamed to `Provider` ([#1665](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1665))
   - `QueryBackend` renamed to `ProviderBackend`
   - `QueryBackendParams` renamed to `ProviderBackendParams`
   - `queryHandleFor*Backend` renamed to `providerFor*Backend`
