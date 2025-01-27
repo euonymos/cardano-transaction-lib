@@ -31,17 +31,17 @@ import Effect.Exception (Error)
 import Effect.Exception (message) as Error
 import Type.Proxy (Proxy(Proxy))
 
-type UtxosAtProvider = Address -> Aff (Either ClientError UtxoMap)
+type UtxosAtQuery = Address -> Aff (Either ClientError UtxoMap)
 
-type GetUtxoByOrefProvider =
+type GetUtxoByOrefQuery =
   TransactionInput -> Aff (Either ClientError (Maybe TransactionOutput))
 
-utxosAtLens :: Lens' ContractEnv UtxosAtProvider
+utxosAtLens :: Lens' ContractEnv UtxosAtQuery
 utxosAtLens =
   prop (Proxy :: _ "provider")
     <<< prop (Proxy :: _ "utxosAt")
 
-getUtxoByOrefLens :: Lens' ContractEnv GetUtxoByOrefProvider
+getUtxoByOrefLens :: Lens' ContractEnv GetUtxoByOrefQuery
 getUtxoByOrefLens =
   prop (Proxy :: _ "provider")
     <<< prop (Proxy :: _ "getUtxoByOref")
@@ -63,7 +63,7 @@ withCardanoCliCompletion node genesisAddr =
 -- | NOTE: It is assumed that utxos retrieved via cardano-cli do not include
 -- | datum or reference scripts.
 completeUtxosAt
-  :: CardanoCli.CardanoNodeInstance -> UtxosAtProvider -> UtxosAtProvider
+  :: CardanoCli.CardanoNodeInstance -> UtxosAtQuery -> UtxosAtQuery
 completeUtxosAt node utxosAt address =
   runExceptT do
     queryLayerUtxos <- ExceptT $ utxosAt address
@@ -79,8 +79,8 @@ completeUtxosAt node utxosAt address =
 completeGetUtxoByOref
   :: CardanoCli.CardanoNodeInstance
   -> Address
-  -> GetUtxoByOrefProvider
-  -> GetUtxoByOrefProvider
+  -> GetUtxoByOrefQuery
+  -> GetUtxoByOrefQuery
 completeGetUtxoByOref node address getUtxoByOref oref =
   runExceptT do
     mbUtxo <- ExceptT $ getUtxoByOref oref
