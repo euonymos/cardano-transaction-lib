@@ -468,7 +468,7 @@
 
       herculesCI = inputs.hercules-ci-effects.lib.mkHerculesCI { inherit inputs; } {
         hercules-ci.flake-update = {
-          enable = true;
+          enable = false;
           updateBranch = "updated-flake-lock";
           createPullRequest = true;
           autoMergeMethod = null;
