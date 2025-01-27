@@ -70,7 +70,7 @@ import Ctl.Internal.Testnet.Server
 import Ctl.Internal.Testnet.Types (TestnetConfig)
 import Ctl.Internal.Testnet.Utils
   ( cleanupOnExit
-  , read872GenesisKey
+  , readGenesisKey
   , runCleanup
   , whenError
   )
@@ -274,7 +274,7 @@ startTestnetContractEnv cfg distr cleanupRef = do
     readGenesisWallets =
       traverse
         ( \location -> do
-            paymentKey <- read872GenesisKey location
+            paymentKey <- readGenesisKey location
             pure $ mkKeyWalletFromPrivateKeys paymentKey Nothing Nothing
         )
         (unwrap cluster).paths.genesisKeys

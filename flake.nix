@@ -16,12 +16,12 @@
       flake = false;
     };
 
-    cardano-node.url = "github:input-output-hk/cardano-node/10.1.3";
+    cardano-node.url = "github:input-output-hk/cardano-node/10.1.4";
 
     # Repository with network parameters
     # NOTE(bladyjoker): Cardano configurations (yaml/json) often change format and break, that's why we pin to a specific known version.
     cardano-configurations = {
-      url = "github:input-output-hk/cardano-configurations?rev=3c5f35bda1b8fd29ab310ad222403a9167f512de";
+      url = "github:input-output-hk/cardano-configurations?rev=a913d87246dc2484562a00c86e5f9c74a20e82ce";
       flake = false;
     };
 
