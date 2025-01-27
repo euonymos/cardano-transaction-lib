@@ -63,7 +63,7 @@ Lucid, on the other hand, provides a way to get a UTxO that contains a specified
 
 - Both CTL and Lucid support [Blockfrost](./blockfrost.md) and [Kupo+Ogmios](./runtime.md)
 - Lucid also supports [Maestro](https://www.gomaestro.org/)
-- Both CTL and Lucid allow for custom backends - Lucid via `Provider` interface implementation, and CTL via a custom `Provider`.
+- Both CTL and Lucid support multiple query backends through a `Provider` interface. Although CTL does not support specifying custom backends without forking, individual queries in the existing backend can still be replaced. Refer to [doc/custom-query-layers.md](./custom-query-layers.md) for more information.
 
 ### Staking support
 
