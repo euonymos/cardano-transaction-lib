@@ -83,6 +83,20 @@ import Affjax.RequestHeader (RequestHeader(ContentType, RequestHeader)) as Affja
 import Affjax.ResponseFormat (string) as Affjax.ResponseFormat
 import Affjax.StatusCode (StatusCode(StatusCode)) as Affjax
 import Cardano.AsCbor (decodeCbor, encodeCbor)
+import Cardano.Provider.Error
+  ( ClientError
+      ( ClientDecodeJsonError
+      , ClientHttpError
+      , ClientHttpResponseError
+      , ClientOtherError
+      )
+  , GetTxMetadataError
+      ( GetTxMetadataTxNotFoundError
+      , GetTxMetadataClientError
+      , GetTxMetadataMetadataEmptyOrMissingError
+      )
+  , ServiceError(ServiceBlockfrostError)
+  )
 import Cardano.Serialization.Lib (toBytes)
 import Cardano.Types
   ( AssetClass(AssetClass)
@@ -110,11 +124,18 @@ import Cardano.Types.Bech32String (Bech32String)
 import Cardano.Types.BigNum (BigNum)
 import Cardano.Types.BigNum as BigNum
 import Cardano.Types.CborBytes (CborBytes)
+import Cardano.Types.Chain (Tip(Tip, TipAtGenesis))
 import Cardano.Types.Coin (Coin(Coin))
 import Cardano.Types.Credential
   ( Credential(PubKeyHashCredential, ScriptHashCredential)
   )
+import Cardano.Types.DelegationsAndRewards (DelegationsAndRewards)
 import Cardano.Types.Epoch (Epoch(Epoch))
+import Cardano.Types.EraSummaries
+  ( EraSummaries
+  , EraSummary
+  , EraSummaryParameters
+  )
 import Cardano.Types.ExUnitPrices (ExUnitPrices(ExUnitPrices))
 import Cardano.Types.ExUnits (ExUnits(ExUnits))
 import Cardano.Types.GeneralTransactionMetadata as GeneralTransactionMetadata
@@ -137,6 +158,18 @@ import Cardano.Types.PoolPubKeyHash as PoolPubKeyHash
 import Cardano.Types.RedeemerTag (RedeemerTag(Spend, Mint, Cert, Reward)) as RedeemerTag
 import Cardano.Types.RewardAddress as RewardAddress
 import Cardano.Types.ScriptRef (ScriptRef(NativeScriptRef, PlutusScriptRef))
+import Cardano.Types.TxEvaluation
+  ( ExecutionUnits
+  , OgmiosDatum
+  , OgmiosScript
+  , OgmiosTxIn
+  , RedeemerPointer
+  , ScriptFailure
+  , TxEvaluationFailure(..)
+  , TxEvaluationR
+  , TxEvaluationResult(..)
+  )
+import Cardano.Types.TxEvaluation as TxEvaluation
 import Cardano.Types.Value (assetToValue, lovelaceValueOf, sum) as Value
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (liftMaybe, throwError)
@@ -149,49 +182,14 @@ import Control.Monad.Reader.Class (ask, asks)
 import Control.Monad.Reader.Trans (ReaderT, runReaderT)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.Affjax (request) as Affjax
-import Ctl.Internal.Contract.Provider.Error
-  ( GetTxMetadataError
-      ( GetTxMetadataTxNotFoundError
-      , GetTxMetadataClientError
-      , GetTxMetadataMetadataEmptyOrMissingError
-      )
-  )
 import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend)
-import Ctl.Internal.QueryM.Ogmios
-  ( AdditionalUtxoSet
-  , ExecutionUnits
-  , OgmiosDatum
-  , OgmiosScript
-  , OgmiosTxIn
-  , RedeemerPointer
-  , ScriptFailure
-  , TxEvaluationFailure(ScriptFailures, UnparsedError)
-  , TxEvaluationR
-  , TxEvaluationResult(TxEvaluationResult)
-  )
-import Ctl.Internal.QueryM.Ogmios as Ogmios
+import Ctl.Internal.QueryM.Ogmios (AdditionalUtxoSet)
 import Ctl.Internal.ServerConfig (ServerConfig, mkHttpUrl)
-import Ctl.Internal.Service.Error
-  ( ClientError
-      ( ClientDecodeJsonError
-      , ClientHttpError
-      , ClientHttpResponseError
-      , ClientOtherError
-      )
-  , ServiceError(ServiceBlockfrostError)
-  )
 import Ctl.Internal.Service.Helpers
   ( aesonArray
   , aesonObject
   , aesonString
   , decodeAssetClass
-  )
-import Ctl.Internal.Types.Chain (Tip(Tip, TipAtGenesis))
-import Ctl.Internal.Types.DelegationsAndRewards (DelegationsAndRewards)
-import Ctl.Internal.Types.EraSummaries
-  ( EraSummaries
-  , EraSummary
-  , EraSummaryParameters
   )
 import Ctl.Internal.Types.ProtocolParameters
   ( CostModelV1
@@ -1099,23 +1097,25 @@ decodeBlockfrostTxEvaluationFailure = aesonObject $ runReaderT cases
   -- translate Ogmios v5.6 ScriptFailures to Ogmios v6
   translateOldToNew :: OldScriptFailure -> Either JsonDecodeError ScriptFailure
   translateOldToNew x = case x of
-    ExtraRedeemers ptrs -> pure $ Ogmios.ExtraRedeemers ptrs
+    ExtraRedeemers ptrs -> pure $ TxEvaluation.ExtraRedeemers ptrs
     MissingRequiredDatums { provided, missing } -> pure $
-      Ogmios.MissingRequiredDatums { missing, provided: provided }
+      TxEvaluation.MissingRequiredDatums { missing, provided: provided }
     MissingRequiredScripts { resolved: resolved0, missing: missing0 } -> do
       missing <- traverse decodeRedeemerPointer missing0
       resolved :: Map RedeemerPointer ScriptHash <- traverse decodeAeson
         (map (encodeAeson :: String -> _) resolved0)
-      pure $ Ogmios.MissingRequiredScripts { missing, resolved: Just resolved }
-    ValidatorFailed { error, traces } -> pure $ Ogmios.ValidatorFailed
+      pure $ TxEvaluation.MissingRequiredScripts
+        { missing, resolved: Just resolved }
+    ValidatorFailed { error, traces } -> pure $ TxEvaluation.ValidatorFailed
       { error, traces }
     UnknownInputReferencedByRedeemer txin -> pure $
-      Ogmios.UnknownInputReferencedByRedeemer [ txin ]
+      TxEvaluation.UnknownInputReferencedByRedeemer [ txin ]
     NonScriptInputReferencedByRedeemer txin -> pure $
-      Ogmios.NonScriptInputReferencedByRedeemer txin
+      TxEvaluation.NonScriptInputReferencedByRedeemer txin
     IllFormedExecutionBudget mexu -> pure $
-      Ogmios.IllFormedExecutionBudget mexu
-    NoCostModelForLanguage lang -> pure $ Ogmios.NoCostModelForLanguage [ lang ]
+      TxEvaluation.IllFormedExecutionBudget mexu
+    NoCostModelForLanguage lang -> pure $ TxEvaluation.NoCostModelForLanguage
+      [ lang ]
 
   decodeScriptFailures :: ObjectParser TxEvaluationFailure
   decodeScriptFailures = ReaderT \o -> do

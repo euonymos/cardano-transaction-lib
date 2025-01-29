@@ -2,9 +2,9 @@ module Ctl.Internal.Contract (getChainTip, getProtocolParameters) where
 
 import Prelude
 
+import Cardano.Types.Chain (Tip)
 import Control.Monad.Reader.Class (asks)
 import Ctl.Internal.Contract.Monad (Contract, getProvider)
-import Ctl.Internal.Types.Chain (Tip)
 import Ctl.Internal.Types.ProtocolParameters (ProtocolParameters)
 import Data.Either (either)
 import Effect.Aff.Class (liftAff)

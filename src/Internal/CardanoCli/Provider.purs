@@ -4,6 +4,7 @@ module Internal.CardanoCli.Provider
 
 import Prelude
 
+import Cardano.Provider.Error (ClientError(ClientOtherError))
 import Cardano.Types.Address (Address)
 import Cardano.Types.TransactionInput (TransactionInput)
 import Cardano.Types.TransactionOutput (TransactionOutput)
@@ -19,7 +20,6 @@ import Ctl.Internal.CardanoCli
   , queryUtxosViaCardanoCli
   ) as CardanoCli
 import Ctl.Internal.Contract.Monad (Contract, ContractEnv)
-import Ctl.Internal.Service.Error (ClientError(ClientOtherError))
 import Data.Bifunctor (bimap)
 import Data.Either (Either)
 import Data.Lens (Lens', (%~))

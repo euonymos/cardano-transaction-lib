@@ -38,10 +38,7 @@ import Cardano.Types
 import Cardano.Types.BigNum as BigNum
 import Cardano.Types.TransactionInput (TransactionInput(TransactionInput))
 import Cardano.Types.TransactionOutput (TransactionOutput)
-import Cardano.Types.UtxoMap (UtxoMap, pprintUtxoMap)
-import Cardano.Types.Value (Value)
-import Ctl.Internal.Helpers (bugTrackerLink, pprintTagSet)
-import Ctl.Internal.QueryM.Ogmios
+import Cardano.Types.TxEvaluation
   ( RedeemerPointer
   , ScriptFailure
       ( ExtraRedeemers
@@ -56,6 +53,9 @@ import Ctl.Internal.QueryM.Ogmios
       )
   , TxEvaluationFailure(UnparsedError, AdditionalUtxoOverlap, ScriptFailures)
   ) as Ogmios
+import Cardano.Types.UtxoMap (UtxoMap, pprintUtxoMap)
+import Cardano.Types.Value (Value)
+import Ctl.Internal.Helpers (bugTrackerLink, pprintTagSet)
 import Ctl.Internal.Types.Val (Val, pprintVal)
 import Data.Array (catMaybes, filter, uncons) as Array
 import Data.Bifunctor (bimap)

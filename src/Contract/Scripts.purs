@@ -12,6 +12,7 @@ module Contract.Scripts
 
 import Prelude
 
+import Cardano.Provider.Error (ClientError)
 import Cardano.Types
   ( PlutusScript(PlutusScript)
   , ScriptHash
@@ -33,7 +34,6 @@ import Cardano.Types.ScriptRef (ScriptRef)
 import Contract.Monad (Contract)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.Contract.Monad (getProvider)
-import Ctl.Internal.Service.Error (ClientError)
 import Data.Either (Either)
 import Data.Map (Map)
 import Data.Map as Map

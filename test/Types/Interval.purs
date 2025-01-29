@@ -9,10 +9,10 @@ import Prelude
 import Aeson (class DecodeAeson, decodeJsonString, printJsonDecodeError)
 import Cardano.Types (Slot(Slot))
 import Cardano.Types.BigNum (fromInt) as BigNum
+import Cardano.Types.EraSummaries (EraSummaries)
 import Control.Monad.Error.Class (liftEither)
 import Control.Monad.Except (throwError)
 import Ctl.Internal.QueryM.Ogmios (OgmiosEraSummaries, OgmiosSystemStart)
-import Ctl.Internal.Types.EraSummaries (EraSummaries)
 import Ctl.Internal.Types.Interval
   ( Interval
   , POSIXTime(POSIXTime)

@@ -15,11 +15,11 @@ import Cardano.Types
   , ScriptHash
   , StakeCredential(StakeCredential)
   )
+import Cardano.Types.DelegationsAndRewards (DelegationsAndRewards)
+import Cardano.Types.DelegationsAndRewards (DelegationsAndRewards) as X
 import Contract.Monad (Contract)
 import Control.Monad.Reader (asks)
 import Ctl.Internal.Contract.Monad (getProvider)
-import Ctl.Internal.Types.DelegationsAndRewards (DelegationsAndRewards)
-import Ctl.Internal.Types.DelegationsAndRewards (DelegationsAndRewards) as X
 import Data.Either (either)
 import Data.Maybe (Maybe)
 import Data.Newtype (wrap)

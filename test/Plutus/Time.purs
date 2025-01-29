@@ -6,11 +6,7 @@ import Prelude
 
 import Cardano.Types (Epoch(Epoch), Slot(Slot))
 import Cardano.Types.BigNum as BigNum
-import Ctl.Internal.QueryM.Ogmios
-  ( OgmiosEraSummaries(OgmiosEraSummaries)
-  , OgmiosSystemStart
-  )
-import Ctl.Internal.Types.EraSummaries
+import Cardano.Types.EraSummaries
   ( EpochLength(EpochLength)
   , EraSummaries(EraSummaries)
   , EraSummary(EraSummary)
@@ -19,6 +15,10 @@ import Ctl.Internal.Types.EraSummaries
   , RelativeTime(RelativeTime)
   , SafeZone(SafeZone)
   , SlotLength(SlotLength)
+  )
+import Ctl.Internal.QueryM.Ogmios
+  ( OgmiosEraSummaries(OgmiosEraSummaries)
+  , OgmiosSystemStart
   )
 import Ctl.Internal.Types.Interval
   ( AbsTime(AbsTime)
