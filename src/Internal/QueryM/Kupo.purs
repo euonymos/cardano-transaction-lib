@@ -60,7 +60,7 @@ import Control.Monad.Except.Trans (ExceptT(ExceptT), except, runExceptT)
 import Control.Monad.Reader.Class (asks)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.Affjax (request) as Affjax
-import Ctl.Internal.Contract.QueryHandle.Error
+import Ctl.Internal.Contract.Provider.Error
   ( GetTxMetadataError
       ( GetTxMetadataClientError
       , GetTxMetadataTxNotFoundError

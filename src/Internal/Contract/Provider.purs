@@ -1,7 +1,7 @@
-module Ctl.Internal.Contract.QueryHandle
-  ( queryHandleForCtlBackend
-  , queryHandleForBlockfrostBackend
-  , queryHandleForSelfHostedBlockfrostBackend
+module Ctl.Internal.Contract.Provider
+  ( providerForCtlBackend
+  , providerForBlockfrostBackend
+  , providerForSelfHostedBlockfrostBackend
   ) where
 
 import Prelude
@@ -11,8 +11,8 @@ import Cardano.Types.Transaction (hash) as Transaction
 import Contract.Log (logDebug')
 import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.Contract.LogParams (LogParams)
-import Ctl.Internal.Contract.QueryBackend (BlockfrostBackend, CtlBackend)
-import Ctl.Internal.Contract.QueryHandle.Type (QueryHandle)
+import Ctl.Internal.Contract.Provider.Type (Provider)
+import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend, CtlBackend)
 import Ctl.Internal.Helpers (logWithLevel)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM (evaluateTxOgmios, getChainTip, submitTxOgmios) as QueryM
@@ -45,13 +45,13 @@ import Data.Newtype (wrap)
 import Effect.Aff (Aff)
 import Effect.Exception (error)
 
-queryHandleForCtlBackend
+providerForCtlBackend
   :: forall rest
    . (forall (a :: Type). LogParams rest -> CtlBackend -> QueryM a -> Aff a)
   -> LogParams rest
   -> CtlBackend
-  -> QueryHandle
-queryHandleForCtlBackend runQueryM params backend =
+  -> Provider
+providerForCtlBackend runQueryM params backend =
   { getDatumByHash: runQueryM' <<< Kupo.getDatumByHash
   , getScriptByHash: runQueryM' <<< Kupo.getScriptByHash
   , getUtxoByOref: runQueryM' <<< Kupo.getUtxoByOref
@@ -91,9 +91,9 @@ queryHandleForCtlBackend runQueryM params backend =
   runQueryM' :: forall (a :: Type). QueryM a -> Aff a
   runQueryM' = runQueryM params backend
 
-queryHandleForBlockfrostBackend
-  :: forall rest. LogParams rest -> BlockfrostBackend -> QueryHandle
-queryHandleForBlockfrostBackend logParams backend =
+providerForBlockfrostBackend
+  :: forall rest. LogParams rest -> BlockfrostBackend -> Provider
+providerForBlockfrostBackend logParams backend =
   { getDatumByHash: runBlockfrostServiceM' <<< Blockfrost.getDatumByHash
   , getScriptByHash: runBlockfrostServiceM' <<< Blockfrost.getScriptByHash
   , getUtxoByOref: runBlockfrostServiceM' <<< Blockfrost.getUtxoByOref
@@ -129,24 +129,24 @@ queryHandleForBlockfrostBackend logParams backend =
     (fromMaybe logWithLevel logParams.customLogger logParams.logLevel)
     backend
 
-queryHandleForSelfHostedBlockfrostBackend
+providerForSelfHostedBlockfrostBackend
   :: forall rest
    . LogParams rest
   -> BlockfrostBackend
   -> (forall (a :: Type). LogParams rest -> CtlBackend -> QueryM a -> Aff a)
   -> CtlBackend
-  -> QueryHandle
-queryHandleForSelfHostedBlockfrostBackend
+  -> Provider
+providerForSelfHostedBlockfrostBackend
   params
   blockfrostBackend
   runQueryM
   ctlBackend =
   let
-    blockfrostQueryHandle = queryHandleForBlockfrostBackend params
+    blockfrostProvider = providerForBlockfrostBackend params
       blockfrostBackend
-    ctlQueryHandle = queryHandleForCtlBackend runQueryM params ctlBackend
+    ctlProvider = providerForCtlBackend runQueryM params ctlBackend
   in
-    blockfrostQueryHandle
-      { evaluateTx = ctlQueryHandle.evaluateTx
-      , submitTx = ctlQueryHandle.submitTx
+    blockfrostProvider
+      { evaluateTx = ctlProvider.evaluateTx
+      , submitTx = ctlProvider.submitTx
       }

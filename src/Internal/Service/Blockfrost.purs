@@ -149,14 +149,14 @@ import Control.Monad.Reader.Class (ask, asks)
 import Control.Monad.Reader.Trans (ReaderT, runReaderT)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.Affjax (request) as Affjax
-import Ctl.Internal.Contract.QueryBackend (BlockfrostBackend)
-import Ctl.Internal.Contract.QueryHandle.Error
+import Ctl.Internal.Contract.Provider.Error
   ( GetTxMetadataError
       ( GetTxMetadataTxNotFoundError
       , GetTxMetadataClientError
       , GetTxMetadataMetadataEmptyOrMissingError
       )
   )
+import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend)
 import Ctl.Internal.QueryM.Ogmios
   ( AdditionalUtxoSet
   , ExecutionUnits

@@ -45,7 +45,7 @@ For a more in-depth explanation of the differences between PAB and CTL (with cod
 
 ### Query layer differences
 
-Lucid uses a [`Provider` class](https://deno.land/x/lucid@0.10.5/mod.ts?s=Provider) that defines all available queries. CTL query methods are defined in [`QueryHandle`](https://github.com/Plutonomicon/cardano-transaction-lib/blob/develop/src/Internal/Contract/QueryHandle/Type.purs#L36).
+Lucid uses a [`Provider` class](https://deno.land/x/lucid@0.10.5/mod.ts?s=Provider) that defines all available queries. CTL query methods are defined in [`Provider`](https://github.com/Plutonomicon/cardano-transaction-lib/blob/develop/src/Internal/Contract/Provider/Type.purs#L36).
 
 CTL supports the following queries that Lucid does not:
 
@@ -63,7 +63,7 @@ Lucid, on the other hand, provides a way to get a UTxO that contains a specified
 
 - Both CTL and Lucid support [Blockfrost](./blockfrost.md) and [Kupo+Ogmios](./runtime.md)
 - Lucid also supports [Maestro](https://www.gomaestro.org/)
-- Both CTL and Lucid allow for custom backends - Lucid via `Provider` interface implementation, and CTL via a custom `QueryHandle`.
+- Both CTL and Lucid support multiple query backends through a `Provider` interface. Although CTL does not support specifying custom backends without forking, individual queries in the existing backend can still be replaced. Refer to [doc/custom-query-layers.md](./custom-query-layers.md) for more information.
 
 ### Staking support
 

@@ -46,7 +46,7 @@ import Ctl.Internal.BalanceTx.Types
   , liftContract
   )
 import Ctl.Internal.Contract.MinFee (calculateMinFee) as Contract.MinFee
-import Ctl.Internal.Contract.Monad (getQueryHandle)
+import Ctl.Internal.Contract.Monad (getProvider)
 import Ctl.Internal.Helpers (liftEither, unsafeFromJust)
 import Ctl.Internal.QueryM.Ogmios
   ( AdditionalUtxoSet
@@ -97,10 +97,10 @@ evalTxExecutionUnits tx = do
 
   worker :: Ogmios.AdditionalUtxoSet -> BalanceTxM Ogmios.TxEvaluationResult
   worker additionalUtxos = do
-    queryHandle <- liftContract getQueryHandle
+    provider <- liftContract getProvider
     evalResult' <-
       map unwrap <$> liftContract
-        (liftAff $ attempt $ queryHandle.evaluateTx tx additionalUtxos)
+        (liftAff $ attempt $ provider.evaluateTx tx additionalUtxos)
     case evalResult' of
       Left err | tx ^. _isValid ->
         liftAff $ throwError err

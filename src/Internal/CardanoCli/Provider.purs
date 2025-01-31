@@ -1,4 +1,4 @@
-module Internal.CardanoCli.QueryHandle
+module Internal.CardanoCli.Provider
   ( withCardanoCliCompletion
   ) where
 
@@ -38,12 +38,12 @@ type GetUtxoByOrefQuery =
 
 utxosAtLens :: Lens' ContractEnv UtxosAtQuery
 utxosAtLens =
-  prop (Proxy :: _ "handle")
+  prop (Proxy :: _ "provider")
     <<< prop (Proxy :: _ "utxosAt")
 
 getUtxoByOrefLens :: Lens' ContractEnv GetUtxoByOrefQuery
 getUtxoByOrefLens =
-  prop (Proxy :: _ "handle")
+  prop (Proxy :: _ "provider")
     <<< prop (Proxy :: _ "getUtxoByOref")
 
 withCardanoCliCompletion

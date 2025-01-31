@@ -105,7 +105,7 @@ import Ctl.Internal.BalanceTx.Types
 import Ctl.Internal.BalanceTx.UtxoMinAda (utxoMinAdaValue)
 import Ctl.Internal.CoinSelection.UtxoIndex (UtxoIndex, buildUtxoIndex)
 import Ctl.Internal.Contract (getProtocolParameters)
-import Ctl.Internal.Contract.Monad (Contract, filterLockedUtxos, getQueryHandle)
+import Ctl.Internal.Contract.Monad (Contract, filterLockedUtxos, getProvider)
 import Ctl.Internal.Contract.Wallet
   ( getChangeAddress
   , getWalletCollateral
@@ -198,14 +198,14 @@ balanceTxWithConstraints transaction extraUtxos constraintsBuilder =
             Wallet.getWalletUtxos
         -- Use UTxOs from source addresses
         Just srcAddrs -> do
-          queryHandle <- getQueryHandle
+          provider <- getProvider
           -- Even though some of the addresses may be controlled by the wallet,
           -- we can't query the wallet for available UTxOs, because there's no
           -- way to tell it to return UTxOs only from specific subset of the
           -- addresses controlled by a CIP-30 wallet.
           -- `utxosAt` calls are expensive when there are a lot of addresses to
           -- check.
-          parTraverse (queryHandle.utxosAt >>> liftAff >>> map hush) srcAddrs
+          parTraverse (provider.utxosAt >>> liftAff >>> map hush) srcAddrs
             <#> traverse (note CouldNotGetUtxos)
               >>> map (foldr Map.union Map.empty) -- merge all utxos into one map
 

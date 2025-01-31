@@ -1,5 +1,5 @@
-module Ctl.Internal.Contract.QueryHandle.Type
-  ( QueryHandle
+module Ctl.Internal.Contract.Provider.Type
+  ( Provider
   , AffE
   ) where
 
@@ -19,7 +19,7 @@ import Cardano.Types
   , UtxoMap
   )
 import Cardano.Types.AuxiliaryData (AuxiliaryData)
-import Ctl.Internal.Contract.QueryHandle.Error (GetTxMetadataError)
+import Ctl.Internal.Contract.Provider.Error (GetTxMetadataError)
 import Ctl.Internal.QueryM.Ogmios
   ( AdditionalUtxoSet
   , CurrentEpoch
@@ -35,7 +35,7 @@ import Effect.Aff (Aff)
 
 type AffE (a :: Type) = Aff (Either ClientError a)
 
-type QueryHandle =
+type Provider =
   { getDatumByHash :: DataHash -> AffE (Maybe PlutusData)
   , getScriptByHash :: ScriptHash -> AffE (Maybe ScriptRef)
   , getTxAuxiliaryData ::

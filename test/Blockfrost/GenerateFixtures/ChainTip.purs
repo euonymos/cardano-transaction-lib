@@ -2,7 +2,7 @@ module Test.Ctl.Blockfrost.GenerateFixtures.ChainTip (main) where
 
 import Prelude
 
-import Ctl.Internal.Contract.QueryBackend (BlockfrostBackend)
+import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostEndpoint(LatestBlock)
   , BlockfrostRawResponse

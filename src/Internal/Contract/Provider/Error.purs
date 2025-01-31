@@ -1,4 +1,4 @@
-module Ctl.Internal.Contract.QueryHandle.Error
+module Ctl.Internal.Contract.Provider.Error
   ( GetTxMetadataError
       ( GetTxMetadataTxNotFoundError
       , GetTxMetadataMetadataEmptyOrMissingError

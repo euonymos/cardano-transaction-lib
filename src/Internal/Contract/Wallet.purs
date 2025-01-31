@@ -47,7 +47,7 @@ import Control.Monad.Reader.Trans (asks)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.BalanceTx.Collateral.Select (minRequiredCollateral)
 import Ctl.Internal.Contract (getProtocolParameters)
-import Ctl.Internal.Contract.Monad (Contract, filterLockedUtxos, getQueryHandle)
+import Ctl.Internal.Contract.Monad (Contract, filterLockedUtxos, getProvider)
 import Ctl.Internal.Helpers (bugTrackerLink, liftM, liftedM)
 import Ctl.Internal.Service.Error (pprintClientError)
 import Ctl.Internal.Wallet (Wallet, actionBasedOnWallet)
@@ -158,10 +158,10 @@ getWalletCollateral = do
   { maxCollateralInputs, coinsPerUtxoByte } <- unwrap <$> getProtocolParameters
   mbCollateralUTxOs <- getWallet >>= maybe (pure Nothing) do
     actionBasedOnWallet _.getCollateral \kw -> do
-      queryHandle <- getQueryHandle
+      provider <- getProvider
       networkId <- asks _.networkId
       addr <- liftAff $ (unwrap kw).address networkId
-      utxos <- (liftAff $ queryHandle.utxosAt addr)
+      utxos <- (liftAff $ provider.utxosAt addr)
         <#> hush >>> fromMaybe Map.empty
         >>= filterLockedUtxos
       mColl <- liftAff $ (unwrap kw).selectCollateral
@@ -223,7 +223,7 @@ getWalletCollateral = do
 getWalletBalance
   :: Contract Value
 getWalletBalance = do
-  queryHandle <- getQueryHandle
+  provider <- getProvider
   wallet <- getWallet >>= liftM (error "getWalletBalance: no wallet is active")
   let
     getKeyWalletBalance :: _ -> Contract Value
@@ -235,7 +235,7 @@ getWalletBalance = do
             "getWalletBalance: Unable to get payment credential from Address"
         )
         =<< Value.sum <$> flip parTraverse addresses \address -> do
-          eiResponse <- liftAff $ queryHandle.utxosAt address
+          eiResponse <- liftAff $ provider.utxosAt address
           case eiResponse of
             Left err -> liftEffect $ throw $
               "getWalletBalance: utxosAt call error: " <>
@@ -253,13 +253,13 @@ getWalletBalance = do
 
 getWalletUtxos :: Contract (Maybe UtxoMap)
 getWalletUtxos = do
-  queryHandle <- getQueryHandle
+  provider <- getProvider
   wallet <- getWallet >>= liftM (error "getWalletUtxos: no wallet is active")
   let
     getKeyWalletUtxos = \_ -> do
       addresses :: Array Address <- getWalletAddresses
       utxoMaps <- flip parTraverse addresses \address -> do
-        eiResponse <- liftAff $ queryHandle.utxosAt address
+        eiResponse <- liftAff $ provider.utxosAt address
         case eiResponse of
           Left err ->
             liftEffect $ throw $

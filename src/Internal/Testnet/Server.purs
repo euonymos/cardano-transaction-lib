@@ -21,10 +21,10 @@ import Control.Monad.Rec.Class (Step(Loop), tailRecM)
 import Ctl.Internal.Contract.Monad
   ( buildBackend
   , getLedgerConstants
-  , mkQueryHandle
+  , mkProvider
   , stopContractEnv
   )
-import Ctl.Internal.Contract.QueryBackend (mkCtlBackendParams)
+import Ctl.Internal.Contract.ProviderBackend (mkCtlBackendParams)
 import Ctl.Internal.Helpers (concatPaths, (<</>>))
 import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
 import Ctl.Internal.ServerConfig (ServerConfig)
@@ -540,7 +540,7 @@ makeNaiveClusterContractEnv cfg logger customLogger = do
   backendKnownTxs <- liftEffect $ Ref.new Set.empty
   pure
     { backend
-    , handle: mkQueryHandle cfg backend
+    , provider: mkProvider cfg backend
     , networkId: TestnetId
     , logLevel: cfg.logLevel
     , customLogger: customLogger
