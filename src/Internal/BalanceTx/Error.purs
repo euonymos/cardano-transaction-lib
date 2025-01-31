@@ -27,18 +27,7 @@ module Ctl.Internal.BalanceTx.Error
 import Prelude
 
 import Cardano.AsCbor (encodeCbor)
-import Cardano.Transaction.Edit (DetachedRedeemer)
-import Cardano.Types
-  ( Coin
-  , Redeemer(Redeemer)
-  , Transaction
-  , _redeemers
-  , _witnessSet
-  )
-import Cardano.Types.BigNum as BigNum
-import Cardano.Types.TransactionInput (TransactionInput(TransactionInput))
-import Cardano.Types.TransactionOutput (TransactionOutput)
-import Cardano.Types.TxEvaluation
+import Cardano.Provider.TxEvaluation
   ( RedeemerPointer
   , ScriptFailure
       ( ExtraRedeemers
@@ -53,6 +42,17 @@ import Cardano.Types.TxEvaluation
       )
   , TxEvaluationFailure(UnparsedError, AdditionalUtxoOverlap, ScriptFailures)
   ) as Ogmios
+import Cardano.Transaction.Edit (DetachedRedeemer)
+import Cardano.Types
+  ( Coin
+  , Redeemer(Redeemer)
+  , Transaction
+  , _redeemers
+  , _witnessSet
+  )
+import Cardano.Types.BigNum as BigNum
+import Cardano.Types.TransactionInput (TransactionInput(TransactionInput))
+import Cardano.Types.TransactionOutput (TransactionOutput)
 import Cardano.Types.UtxoMap (UtxoMap, pprintUtxoMap)
 import Cardano.Types.Value (Value)
 import Ctl.Internal.Helpers (bugTrackerLink, pprintTagSet)

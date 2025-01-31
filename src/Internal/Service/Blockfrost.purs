@@ -97,6 +97,18 @@ import Cardano.Provider.Error
       )
   , ServiceError(ServiceBlockfrostError)
   )
+import Cardano.Provider.TxEvaluation
+  ( ExecutionUnits
+  , OgmiosDatum
+  , OgmiosScript
+  , OgmiosTxIn
+  , RedeemerPointer
+  , ScriptFailure
+  , TxEvaluationFailure(..)
+  , TxEvaluationR
+  , TxEvaluationResult(..)
+  )
+import Cardano.Provider.TxEvaluation as TxEvaluation
 import Cardano.Serialization.Lib (toBytes)
 import Cardano.Types
   ( AssetClass(AssetClass)
@@ -158,18 +170,6 @@ import Cardano.Types.PoolPubKeyHash as PoolPubKeyHash
 import Cardano.Types.RedeemerTag (RedeemerTag(Spend, Mint, Cert, Reward)) as RedeemerTag
 import Cardano.Types.RewardAddress as RewardAddress
 import Cardano.Types.ScriptRef (ScriptRef(NativeScriptRef, PlutusScriptRef))
-import Cardano.Types.TxEvaluation
-  ( ExecutionUnits
-  , OgmiosDatum
-  , OgmiosScript
-  , OgmiosTxIn
-  , RedeemerPointer
-  , ScriptFailure
-  , TxEvaluationFailure(..)
-  , TxEvaluationR
-  , TxEvaluationResult(..)
-  )
-import Cardano.Types.TxEvaluation as TxEvaluation
 import Cardano.Types.Value (assetToValue, lovelaceValueOf, sum) as Value
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (liftMaybe, throwError)

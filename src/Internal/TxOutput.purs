@@ -10,6 +10,7 @@ module Ctl.Internal.TxOutput
 import Prelude
 
 import Cardano.AsCbor (decodeCbor, encodeCbor)
+import Cardano.Provider.TxEvaluation (OgmiosTxOut, OgmiosTxOutRef)
 import Cardano.Serialization.Lib (fromBytes, toBytes)
 import Cardano.Types (DataHash, PlutusData, TransactionInput(TransactionInput))
 import Cardano.Types.Address as Address
@@ -19,7 +20,6 @@ import Cardano.Types.OutputDatum
   , outputDatumDatum
   )
 import Cardano.Types.TransactionOutput (TransactionOutput(TransactionOutput))
-import Cardano.Types.TxEvaluation (OgmiosTxOut, OgmiosTxOutRef)
 import Control.Alt ((<|>))
 import Control.Alternative (guard)
 import Data.ByteArray (byteArrayToHex, hexToByteArray)

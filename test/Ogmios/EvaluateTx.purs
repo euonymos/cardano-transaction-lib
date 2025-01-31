@@ -3,16 +3,16 @@ module Test.Ctl.Ogmios.EvaluateTx (suite) where
 import Prelude
 
 import Aeson (JsonDecodeError(TypeMismatch))
-import Cardano.Types (BigNum)
-import Cardano.Types.BigNum as BigNum
-import Cardano.Types.RedeemerTag (RedeemerTag(Spend, Cert, Reward))
-import Cardano.Types.TxEvaluation
+import Cardano.Provider.TxEvaluation
   ( ExecutionUnits
   , RedeemerPointer
   , TxEvaluationFailure(UnparsedError, ScriptFailures)
   , TxEvaluationR(TxEvaluationR)
   , TxEvaluationResult(TxEvaluationResult)
   )
+import Cardano.Types (BigNum)
+import Cardano.Types.BigNum as BigNum
+import Cardano.Types.RedeemerTag (RedeemerTag(Spend, Cert, Reward))
 import Ctl.Internal.QueryM.JsonRpc2
   ( OgmiosDecodeError(ResultDecodingError)
   , decodeOgmios

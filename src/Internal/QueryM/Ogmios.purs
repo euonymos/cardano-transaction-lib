@@ -69,6 +69,17 @@ import Aeson
   , (.:?)
   )
 import Cardano.AsCbor (decodeCbor, encodeCbor)
+import Cardano.Provider.TxEvaluation
+  ( ExecutionUnits
+  , OgmiosTxId
+  , OgmiosTxOut
+  , OgmiosTxOutRef
+  , RedeemerPointer
+  , ScriptFailure(..)
+  , TxEvaluationFailure(..)
+  , TxEvaluationR(..)
+  , TxEvaluationResult(..)
+  )
 import Cardano.Serialization.Lib (fromBytes, ipv4_new)
 import Cardano.Types
   ( BigNum(BigNum)
@@ -118,17 +129,6 @@ import Cardano.Types.RewardAddress as RewardAddress
 import Cardano.Types.ScriptRef (ScriptRef(NativeScriptRef, PlutusScriptRef))
 import Cardano.Types.Slot (Slot(Slot))
 import Cardano.Types.TransactionHash (TransactionHash)
-import Cardano.Types.TxEvaluation
-  ( ExecutionUnits
-  , OgmiosTxId
-  , OgmiosTxOut
-  , OgmiosTxOutRef
-  , RedeemerPointer
-  , ScriptFailure(..)
-  , TxEvaluationFailure(..)
-  , TxEvaluationR(..)
-  , TxEvaluationResult(..)
-  )
 import Cardano.Types.URL (URL(URL))
 import Cardano.Types.UnitInterval (UnitInterval(UnitInterval))
 import Cardano.Types.Value (Value, getMultiAsset, valueToCoin)

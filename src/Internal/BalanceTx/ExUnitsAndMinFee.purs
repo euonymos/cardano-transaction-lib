@@ -6,6 +6,10 @@ module Ctl.Internal.BalanceTx.ExUnitsAndMinFee
 import Prelude
 
 import Cardano.AsCbor (encodeCbor)
+import Cardano.Provider.TxEvaluation
+  ( TxEvaluationFailure(AdditionalUtxoOverlap, UnparsedError)
+  , TxEvaluationResult(TxEvaluationResult)
+  )
 import Cardano.Types
   ( Coin
   , CostModel
@@ -29,10 +33,6 @@ import Cardano.Types.BigNum as BigNum
 import Cardano.Types.ScriptRef as ScriptRef
 import Cardano.Types.TransactionInput (TransactionInput)
 import Cardano.Types.TransactionWitnessSet (_redeemers)
-import Cardano.Types.TxEvaluation
-  ( TxEvaluationFailure(AdditionalUtxoOverlap, UnparsedError)
-  , TxEvaluationResult(TxEvaluationResult)
-  )
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except.Trans (except)
 import Ctl.Internal.BalanceTx.Constraints (_additionalUtxos, _collateralUtxos) as Constraints
