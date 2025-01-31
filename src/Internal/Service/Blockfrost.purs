@@ -104,9 +104,9 @@ import Cardano.Provider.TxEvaluation
   , OgmiosTxIn
   , RedeemerPointer
   , ScriptFailure
-  , TxEvaluationFailure(..)
+  , TxEvaluationFailure(ScriptFailures, UnparsedError)
   , TxEvaluationR
-  , TxEvaluationResult(..)
+  , TxEvaluationResult(TxEvaluationResult)
   )
 import Cardano.Provider.TxEvaluation as TxEvaluation
 import Cardano.Serialization.Lib (toBytes)

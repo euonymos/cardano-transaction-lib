@@ -75,10 +75,19 @@ import Cardano.Provider.TxEvaluation
   , OgmiosTxOut
   , OgmiosTxOutRef
   , RedeemerPointer
-  , ScriptFailure(..)
-  , TxEvaluationFailure(..)
-  , TxEvaluationR(..)
-  , TxEvaluationResult(..)
+  , ScriptFailure
+      ( InternalLedgerTypeConversionError
+      , NoCostModelForLanguage
+      , UnknownInputReferencedByRedeemer
+      , MissingRequiredDatums
+      , ExtraRedeemers
+      , NonScriptInputReferencedByRedeemer
+      , ValidatorFailed
+      , MissingRequiredScripts
+      )
+  , TxEvaluationFailure(UnparsedError, AdditionalUtxoOverlap, ScriptFailures)
+  , TxEvaluationR(TxEvaluationR)
+  , TxEvaluationResult(TxEvaluationResult)
   )
 import Cardano.Serialization.Lib (fromBytes, ipv4_new)
 import Cardano.Types
