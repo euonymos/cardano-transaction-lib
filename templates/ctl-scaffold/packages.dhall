@@ -1,9 +1,8 @@
 let upstream =
     -- https://github.com/mlabs-haskell/purescript-cardano-package-set
-      https://raw.githubusercontent.com/mlabs-haskell/purescript-cardano-package-set/e90c63f2ce2ba25c214984e164b47fd3351d0d36/packages.dhall
-        sha256:68f5f97917ba156be2060e7ae1bab6b12fab4d755b6eb6aa997b9c5069bb7065
+      https://raw.githubusercontent.com/mlabs-haskell/purescript-cardano-package-set/df6380a005e5fdb9f1642ab9f1e86d22a00194cc/packages.dhall sha256:af8b447d071f5404716fef7d3d2e45d42f838c8858bc83dc5d98e77dbd167259
 
-let additions = 
+let additions =
       { cardano-transaction-lib =
         { dependencies =
           [ "aeson"
@@ -119,4 +118,4 @@ let additions =
         }
       }
 
-in upstream // additions
+in  upstream // additions
