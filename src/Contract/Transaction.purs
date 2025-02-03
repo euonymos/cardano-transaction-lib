@@ -22,9 +22,9 @@ module Contract.Transaction
 
 import Prelude
 
+import Cardano.Provider.Error (ClientError, GetTxMetadataError)
 import Cardano.Provider.Error
-  ( ClientError
-  , GetTxMetadataError
+  ( GetTxMetadataError
       ( GetTxMetadataTxNotFoundError
       , GetTxMetadataMetadataEmptyOrMissingError
       , GetTxMetadataClientError
