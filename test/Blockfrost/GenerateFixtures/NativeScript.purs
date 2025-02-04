@@ -24,7 +24,7 @@ import Contract.TxConstraints (TxConstraints) as Constraints
 import Contract.Value (lovelaceValueOf) as Value
 import Contract.Wallet (ownPaymentPubKeyHash, ownStakePubKeyHash)
 import Ctl.Examples.Helpers (mustPayToPubKeyStakeAddressWithScriptRef)
-import Ctl.Internal.Contract.QueryBackend (BlockfrostBackend)
+import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostEndpoint(NativeScriptByHash)
   , BlockfrostRawResponse

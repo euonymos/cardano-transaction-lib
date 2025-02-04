@@ -1,18 +1,19 @@
-module Ctl.Internal.Contract.QueryHandle
-  ( queryHandleForCtlBackend
-  , queryHandleForBlockfrostBackend
-  , queryHandleForSelfHostedBlockfrostBackend
+module Ctl.Internal.Contract.Provider
+  ( providerForCtlBackend
+  , providerForBlockfrostBackend
+  , providerForSelfHostedBlockfrostBackend
   ) where
 
 import Prelude
 
 import Cardano.AsCbor (encodeCbor)
+import Cardano.Provider.Error (ClientError(ClientOtherError))
+import Cardano.Provider.Type (Provider)
 import Cardano.Types.Transaction (hash) as Transaction
 import Contract.Log (logDebug')
 import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.Contract.LogParams (LogParams)
-import Ctl.Internal.Contract.QueryBackend (BlockfrostBackend, CtlBackend)
-import Ctl.Internal.Contract.QueryHandle.Type (QueryHandle)
+import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend, CtlBackend)
 import Ctl.Internal.Helpers (logWithLevel)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM (evaluateTxOgmios, getChainTip, submitTxOgmios) as QueryM
@@ -38,20 +39,19 @@ import Ctl.Internal.Service.Blockfrost
   , runBlockfrostServiceM
   )
 import Ctl.Internal.Service.Blockfrost as Blockfrost
-import Ctl.Internal.Service.Error (ClientError(ClientOtherError))
 import Data.Either (Either(Left, Right))
 import Data.Maybe (fromMaybe, isJust)
-import Data.Newtype (wrap)
+import Data.Newtype (unwrap, wrap)
 import Effect.Aff (Aff)
 import Effect.Exception (error)
 
-queryHandleForCtlBackend
+providerForCtlBackend
   :: forall rest
    . (forall (a :: Type). LogParams rest -> CtlBackend -> QueryM a -> Aff a)
   -> LogParams rest
   -> CtlBackend
-  -> QueryHandle
-queryHandleForCtlBackend runQueryM params backend =
+  -> Provider
+providerForCtlBackend runQueryM params backend =
   { getDatumByHash: runQueryM' <<< Kupo.getDatumByHash
   , getScriptByHash: runQueryM' <<< Kupo.getScriptByHash
   , getUtxoByOref: runQueryM' <<< Kupo.getUtxoByOref
@@ -60,7 +60,7 @@ queryHandleForCtlBackend runQueryM params backend =
   , getTxAuxiliaryData: runQueryM' <<< Kupo.getTxAuxiliaryData
   , utxosAt: runQueryM' <<< Kupo.utxosAt
   , getChainTip: Right <$> runQueryM' QueryM.getChainTip
-  , getCurrentEpoch: runQueryM' QueryM.getCurrentEpoch
+  , getCurrentEpoch: unwrap <$> runQueryM' QueryM.getCurrentEpoch
   , submitTx: \tx -> runQueryM' do
       let txHash = Transaction.hash tx
       logDebug' $ "Pre-calculated tx hash: " <> show txHash
@@ -74,9 +74,9 @@ queryHandleForCtlBackend runQueryM params backend =
                 "Computed TransactionHash is not equal to the one returned by Ogmios, please report as bug!"
             )
         SubmitFail err -> Left $ ClientOtherError $ show err
-  , evaluateTx: \tx additionalUtxos -> runQueryM' do
+  , evaluateTx: \tx additionalUtxos -> unwrap <$> runQueryM' do
       let txBytes = encodeCbor tx
-      QueryM.evaluateTxOgmios txBytes additionalUtxos
+      QueryM.evaluateTxOgmios txBytes (wrap additionalUtxos)
   , getEraSummaries: Right <$> runQueryM' QueryM.getEraSummaries
   , getPoolIds: Right <$> runQueryM' QueryM.getPoolIds
   , getPubKeyHashDelegationsAndRewards: \_ pubKeyHash ->
@@ -91,9 +91,9 @@ queryHandleForCtlBackend runQueryM params backend =
   runQueryM' :: forall (a :: Type). QueryM a -> Aff a
   runQueryM' = runQueryM params backend
 
-queryHandleForBlockfrostBackend
-  :: forall rest. LogParams rest -> BlockfrostBackend -> QueryHandle
-queryHandleForBlockfrostBackend logParams backend =
+providerForBlockfrostBackend
+  :: forall rest. LogParams rest -> BlockfrostBackend -> Provider
+providerForBlockfrostBackend logParams backend =
   { getDatumByHash: runBlockfrostServiceM' <<< Blockfrost.getDatumByHash
   , getScriptByHash: runBlockfrostServiceM' <<< Blockfrost.getScriptByHash
   , getUtxoByOref: runBlockfrostServiceM' <<< Blockfrost.getUtxoByOref
@@ -105,11 +105,11 @@ queryHandleForBlockfrostBackend logParams backend =
   , getChainTip: runBlockfrostServiceM' Blockfrost.getChainTip
   , getCurrentEpoch:
       runBlockfrostServiceM' Blockfrost.getCurrentEpoch >>= case _ of
-        Right epoch -> pure $ wrap epoch
+        Right epoch -> pure epoch
         Left err -> throwError $ error $ show err
   , submitTx: runBlockfrostServiceM' <<< Blockfrost.submitTx
   , evaluateTx: \tx additionalUtxos ->
-      runBlockfrostServiceM' $ Blockfrost.evaluateTx tx additionalUtxos
+      runBlockfrostServiceM' $ Blockfrost.evaluateTx tx (wrap additionalUtxos)
   , getEraSummaries: runBlockfrostServiceM' Blockfrost.getEraSummaries
   , getPoolIds: runBlockfrostServiceM' Blockfrost.getPoolIds
   , getPubKeyHashDelegationsAndRewards: \networkId stakePubKeyHash ->
@@ -129,24 +129,24 @@ queryHandleForBlockfrostBackend logParams backend =
     (fromMaybe logWithLevel logParams.customLogger logParams.logLevel)
     backend
 
-queryHandleForSelfHostedBlockfrostBackend
+providerForSelfHostedBlockfrostBackend
   :: forall rest
    . LogParams rest
   -> BlockfrostBackend
   -> (forall (a :: Type). LogParams rest -> CtlBackend -> QueryM a -> Aff a)
   -> CtlBackend
-  -> QueryHandle
-queryHandleForSelfHostedBlockfrostBackend
+  -> Provider
+providerForSelfHostedBlockfrostBackend
   params
   blockfrostBackend
   runQueryM
   ctlBackend =
   let
-    blockfrostQueryHandle = queryHandleForBlockfrostBackend params
+    blockfrostProvider = providerForBlockfrostBackend params
       blockfrostBackend
-    ctlQueryHandle = queryHandleForCtlBackend runQueryM params ctlBackend
+    ctlProvider = providerForCtlBackend runQueryM params ctlBackend
   in
-    blockfrostQueryHandle
-      { evaluateTx = ctlQueryHandle.evaluateTx
-      , submitTx = ctlQueryHandle.submitTx
+    blockfrostProvider
+      { evaluateTx = ctlProvider.evaluateTx
+      , submitTx = ctlProvider.submitTx
       }

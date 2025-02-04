@@ -1,10 +1,10 @@
-module Ctl.Internal.Contract.QueryBackend
+module Ctl.Internal.Contract.ProviderBackend
   ( BlockfrostBackend
   , BlockfrostBackendParams
   , CtlBackend
   , CtlBackendParams
-  , QueryBackend(BlockfrostBackend, CtlBackend)
-  , QueryBackendParams(BlockfrostBackendParams, CtlBackendParams)
+  , ProviderBackend(BlockfrostBackend, CtlBackend)
+  , ProviderBackendParams(BlockfrostBackendParams, CtlBackendParams)
   , defaultConfirmTxDelay
   , getBlockfrostBackend
   , getCtlBackend
@@ -21,10 +21,10 @@ import Data.Maybe (Maybe(Just, Nothing))
 import Data.Time.Duration (Seconds(Seconds))
 
 --------------------------------------------------------------------------------
--- QueryBackend
+-- ProviderBackend
 --------------------------------------------------------------------------------
 
-data QueryBackend
+data ProviderBackend
   = CtlBackend CtlBackend (Maybe BlockfrostBackend)
   | BlockfrostBackend BlockfrostBackend (Maybe CtlBackend)
 
@@ -42,19 +42,19 @@ type BlockfrostBackend =
   , confirmTxDelay :: Maybe Seconds
   }
 
-getCtlBackend :: QueryBackend -> Maybe CtlBackend
+getCtlBackend :: ProviderBackend -> Maybe CtlBackend
 getCtlBackend (CtlBackend backend _) = Just backend
 getCtlBackend (BlockfrostBackend _ backend) = backend
 
-getBlockfrostBackend :: QueryBackend -> Maybe BlockfrostBackend
+getBlockfrostBackend :: ProviderBackend -> Maybe BlockfrostBackend
 getBlockfrostBackend (CtlBackend _ backend) = backend
 getBlockfrostBackend (BlockfrostBackend backend _) = Just backend
 
 --------------------------------------------------------------------------------
--- QueryBackendParams
+-- ProviderBackendParams
 --------------------------------------------------------------------------------
 
-data QueryBackendParams
+data ProviderBackendParams
   = CtlBackendParams CtlBackendParams (Maybe BlockfrostBackendParams)
   | BlockfrostBackendParams BlockfrostBackendParams (Maybe CtlBackendParams)
 
@@ -72,13 +72,13 @@ type BlockfrostBackendParams =
 defaultConfirmTxDelay :: Maybe Seconds
 defaultConfirmTxDelay = Just $ Seconds 30.0
 
-mkCtlBackendParams :: CtlBackendParams -> QueryBackendParams
+mkCtlBackendParams :: CtlBackendParams -> ProviderBackendParams
 mkCtlBackendParams = flip CtlBackendParams Nothing
 
-mkBlockfrostBackendParams :: BlockfrostBackendParams -> QueryBackendParams
+mkBlockfrostBackendParams :: BlockfrostBackendParams -> ProviderBackendParams
 mkBlockfrostBackendParams = flip BlockfrostBackendParams Nothing
 
 mkSelfHostedBlockfrostBackendParams
-  :: BlockfrostBackendParams -> CtlBackendParams -> QueryBackendParams
+  :: BlockfrostBackendParams -> CtlBackendParams -> ProviderBackendParams
 mkSelfHostedBlockfrostBackendParams bf ctl = BlockfrostBackendParams bf
   (Just ctl)

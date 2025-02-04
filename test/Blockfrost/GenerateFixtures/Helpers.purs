@@ -19,7 +19,7 @@ import Contract.Config
   , blockfrostPublicPreviewServerConfig
   , testnetConfig
   )
-import Ctl.Internal.Contract.QueryBackend
+import Ctl.Internal.Contract.ProviderBackend
   ( BlockfrostBackend
   , defaultConfirmTxDelay
   , mkBlockfrostBackendParams

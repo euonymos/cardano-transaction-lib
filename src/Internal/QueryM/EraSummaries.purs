@@ -5,9 +5,9 @@ module Ctl.Internal.QueryM.EraSummaries
 
 import Prelude
 
+import Cardano.Types.EraSummaries (EraSummaries)
 import Ctl.Internal.QueryM (QueryM, mkOgmiosRequest)
 import Ctl.Internal.QueryM.Ogmios (queryEraSummariesCall) as Ogmios
-import Ctl.Internal.Types.EraSummaries (EraSummaries)
 import Data.Newtype (unwrap)
 
 -- | Get `EraSummaries` as used for Slot arithemetic. Details can be found

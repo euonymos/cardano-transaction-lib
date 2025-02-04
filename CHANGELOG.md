@@ -91,9 +91,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ### Changed
 
 - `cardano-serialization-lib` has been updated to `v13.2.0` ([#1656](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1656))
+- `QueryHandle` has been renamed to `Provider` ([#1665](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1665))
+  - `QueryBackend` renamed to `ProviderBackend`
+  - `QueryBackendParams` renamed to `ProviderBackendParams`
+  - `queryHandleFor*Backend` renamed to `providerFor*Backend`
+  - `getQueryHandle` renamed to `getProvider`
+  - `mkQueryHandle` renamed to `mkProvider`
+  - Also multiple corresponding file names have changed replacing the `QueryHandle` names to `Provider` ones
 - Switched to the [purescript-cardano-package-set](https://github.com/mlabs-haskell/purescript-cardano-package-set) in `packages.dhall` (see the [section on updating PureScript dependencies in the docs](./doc/ctl-as-dependency.md)) ([#1667](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1667))
 - Switched to the aggregate `@mlabs-haskell/ctl-npm-meta` package for NPM dependencies (see the [section on updating JS dependencies in the docs](./doc/ctl-as-dependency.md)) ([#1666](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1666))
 - Ignore **any** tx evaluation errors if tx marked invalid. Previously, certain internal evaluation errors were not properly handled, leading to unexpected behavior for a subset of explicitly marked "invalid" transactions. ([#1668](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1668))
+- `Provider` (previously called `QueryHandle`) is extracted to its own package [purescript-cardano-provider](https://github.com/mlabs-haskell/purescript-cardano-provider) using module names in the format `Cardano.Provider.*` ([#1671](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1671))
 
 ### Fixed
 

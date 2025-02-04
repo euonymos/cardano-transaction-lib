@@ -22,7 +22,7 @@ import Control.Monad.Error.Class (liftMaybe)
 import Control.Promise (Promise, toAffE)
 import Ctl.Internal.Affjax (request) as Affjax
 import Ctl.Internal.Contract.Hooks (emptyHooks)
-import Ctl.Internal.Contract.QueryBackend (QueryBackend(CtlBackend))
+import Ctl.Internal.Contract.ProviderBackend (ProviderBackend(CtlBackend))
 import Ctl.Internal.Helpers (liftedM, unsafeFromJust, (<</>>))
 import Ctl.Internal.QueryM (ClusterSetup)
 import Ctl.Internal.Test.E2E.Browser (withBrowser)

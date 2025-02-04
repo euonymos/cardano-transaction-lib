@@ -34,12 +34,12 @@ import Ctl.Internal.Contract.Monad
   , ContractSynchronizationParams
   , ContractTimeParams
   ) as X
-import Ctl.Internal.Contract.QueryBackend
+import Ctl.Internal.Contract.ProviderBackend
   ( BlockfrostBackendParams
   , CtlBackend
   , CtlBackendParams
-  , QueryBackend(BlockfrostBackend, CtlBackend)
-  , QueryBackendParams(BlockfrostBackendParams, CtlBackendParams)
+  , ProviderBackend(BlockfrostBackend, CtlBackend)
+  , ProviderBackendParams(BlockfrostBackendParams, CtlBackendParams)
   , defaultConfirmTxDelay
   , getBlockfrostBackend
   , getCtlBackend
@@ -47,7 +47,7 @@ import Ctl.Internal.Contract.QueryBackend
   , mkCtlBackendParams
   , mkSelfHostedBlockfrostBackendParams
   ) as X
-import Ctl.Internal.Contract.QueryBackend (mkCtlBackendParams)
+import Ctl.Internal.Contract.ProviderBackend (mkCtlBackendParams)
 import Ctl.Internal.ServerConfig
   ( Host
   , ServerConfig

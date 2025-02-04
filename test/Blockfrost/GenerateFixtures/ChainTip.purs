@@ -2,14 +2,14 @@ module Test.Ctl.Blockfrost.GenerateFixtures.ChainTip (main) where
 
 import Prelude
 
-import Ctl.Internal.Contract.QueryBackend (BlockfrostBackend)
+import Cardano.Types.Chain (Tip)
+import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostEndpoint(LatestBlock)
   , BlockfrostRawResponse
   , runBlockfrostServiceTestM
   )
 import Ctl.Internal.Service.Blockfrost (getChainTip) as Blockfrost
-import Ctl.Internal.Types.Chain (Tip)
 import Data.Either (hush)
 import Data.Maybe (Maybe(Just, Nothing))
 import Effect (Effect)

@@ -88,6 +88,10 @@ import Cardano.Plutus.DataSchema
   )
 import Cardano.ToData (class ToData, genericToData, toData)
 import Cardano.Types.BigNum (add, fromBigInt, maxValue, one, toBigInt, zero) as BigNum
+import Cardano.Types.EraSummaries
+  ( EraSummaries(EraSummaries)
+  , EraSummary(EraSummary)
+  )
 import Cardano.Types.PlutusData (PlutusData(Constr))
 import Cardano.Types.Slot (Slot(Slot))
 import Control.Monad.Error.Class (throwError)
@@ -101,10 +105,6 @@ import Ctl.Internal.Helpers
   , unsafeFromJust
   )
 import Ctl.Internal.QueryM.Ogmios (aesonObject)
-import Ctl.Internal.Types.EraSummaries
-  ( EraSummaries(EraSummaries)
-  , EraSummary(EraSummary)
-  )
 import Ctl.Internal.Types.SystemStart (SystemStart, sysStartUnixTime)
 import Data.Argonaut.Encode.Encoders (encodeString)
 import Data.Array (find, head, index, length)
