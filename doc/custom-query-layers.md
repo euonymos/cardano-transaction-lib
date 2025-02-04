@@ -16,9 +16,9 @@
 
 CTL can be extended with custom (user) query layers if needed. At this moment it can be done by forking.
 
-Every query CTL uses, except of backend-specific ones, goes through a [provider](https://github.com/Plutonomicon/cardano-transaction-lib/blob/10a88faa2e6237aafc90568e3488f3421517af63/src/Internal/Contract/Provider/Type.purs#L36).
+Every query CTL uses, except of backend-specific ones, goes through a [provider](https://github.com/mlabs-haskell/purescript-cardano-provider/blob/e789464eac6dc18708b25f7a9008a7e6633b3f9a/src/Provider/Type.purs#L20).
 
-A new [backend option](https://github.com/Plutonomicon/cardano-transaction-lib/blob/10a88faa2e6237aafc90568e3488f3421517af63/src/Internal/Contract/ProviderBackend.purs#L57) should be added, with corresponding [initialization code](https://github.com/Plutonomicon/cardano-transaction-lib/blob/develop/src/Internal/Contract/Provider.purs)
+A new [backend option](https://github.com/Plutonomicon/cardano-transaction-lib/blob/20207fcda113cdafc80ef136d4c59e1ca3fe698e/src/Internal/Contract/ProviderBackend.purs#L57) should be added, with corresponding [initialization code](https://github.com/Plutonomicon/cardano-transaction-lib/blob/develop/src/Internal/Contract/Provider.purs)
 
 ## Replacing some queries in existing backend
 
