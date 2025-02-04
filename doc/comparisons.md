@@ -45,7 +45,7 @@ For a more in-depth explanation of the differences between PAB and CTL (with cod
 
 ### Query layer differences
 
-Lucid uses a [`Provider` class](https://deno.land/x/lucid@0.10.5/mod.ts?s=Provider) that defines all available queries. CTL query methods are defined in [`Provider`](https://github.com/Plutonomicon/cardano-transaction-lib/blob/develop/src/Internal/Contract/Provider/Type.purs#L36).
+Lucid uses a [`Provider` class](https://deno.land/x/lucid@0.10.5/mod.ts?s=Provider) that defines all available queries. CTL query methods are defined in [`Provider`](https://github.com/mlabs-haskell/purescript-cardano-provider/blob/e789464eac6dc18708b25f7a9008a7e6633b3f9a/src/Provider/Type.purs#L20).
 
 CTL supports the following queries that Lucid does not:
 
