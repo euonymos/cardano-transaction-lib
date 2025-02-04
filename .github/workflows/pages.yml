@@ -1,5 +1,8 @@
 name: Build and Deploy docs to Github Pages
-on: push
+on:
+  push:
+    branches:
+      - develop
 permissions:
   contents: write
 jobs:
