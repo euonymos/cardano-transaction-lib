@@ -18,24 +18,12 @@ import Prelude
 import Cardano.Types (BigNum, Epoch(Epoch), Slot)
 import Cardano.Types (Slot(Slot)) as X
 import Cardano.Types.BigNum as BigNum
-import Contract.Chain (getTip) as Chain
-import Contract.Log (logInfo')
-import Contract.Monad (Contract, liftContractM, liftedE)
-import Control.Monad.Reader.Class (asks)
-import Ctl.Internal.Contract (getChainTip)
-import Ctl.Internal.Contract.Monad (getProvider)
-import Ctl.Internal.Helpers (liftM)
-import Ctl.Internal.QueryM.Ogmios (CurrentEpoch(CurrentEpoch))
-import Ctl.Internal.QueryM.Ogmios
-  ( CurrentEpoch(CurrentEpoch)
-  , OgmiosEraSummaries(OgmiosEraSummaries)
-  ) as ExportOgmios
-import Ctl.Internal.Types.Chain
+import Cardano.Types.Chain
   ( BlockHeaderHash(BlockHeaderHash)
   , ChainTip(ChainTip)
   , Tip(TipAtGenesis, Tip)
   ) as Chain
-import Ctl.Internal.Types.EraSummaries
+import Cardano.Types.EraSummaries
   ( EpochLength(EpochLength)
   , EraSummaries(EraSummaries)
   , EraSummary(EraSummary)
@@ -44,7 +32,18 @@ import Ctl.Internal.Types.EraSummaries
   , SafeZone(SafeZone)
   , SlotLength(SlotLength)
   ) as ExportEraSummaries
-import Ctl.Internal.Types.EraSummaries (EraSummaries, EraSummary)
+import Cardano.Types.EraSummaries (EraSummaries, EraSummary)
+import Contract.Chain (getTip) as Chain
+import Contract.Log (logInfo')
+import Contract.Monad (Contract, liftContractM, liftedE)
+import Control.Monad.Reader.Class (asks)
+import Ctl.Internal.Contract (getChainTip)
+import Ctl.Internal.Contract.Monad (getProvider)
+import Ctl.Internal.Helpers (liftM)
+import Ctl.Internal.QueryM.Ogmios
+  ( CurrentEpoch(CurrentEpoch)
+  , OgmiosEraSummaries(OgmiosEraSummaries)
+  ) as ExportOgmios
 import Ctl.Internal.Types.Interval
   ( AbsTime(AbsTime)
   , Closure
@@ -174,10 +173,10 @@ normalizeTimeInterval = case _ of
 getCurrentEpoch :: Contract Epoch
 getCurrentEpoch = do
   provider <- getProvider
-  CurrentEpoch bigNum <- liftAff $ provider.getCurrentEpoch
+  epoch <- liftAff provider.getCurrentEpoch
   map Epoch $ liftM (error "Unable to convert CurrentEpoch")
     $ UInt.fromString
-    $ BigNum.toString (bigNum :: BigNum)
+    $ BigNum.toString (epoch :: BigNum)
 
 -- | Get `EraSummaries` as used for Slot arithemetic.
 -- |

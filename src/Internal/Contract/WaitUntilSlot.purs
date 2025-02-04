@@ -9,14 +9,14 @@ import Prelude
 
 import Cardano.Types (BigNum, Slot(Slot))
 import Cardano.Types.BigNum as BigNum
+import Cardano.Types.Chain as Chain
+import Cardano.Types.EraSummaries (EraSummaries(EraSummaries))
 import Contract.Log (logTrace')
 import Control.Monad.Error.Class (liftEither, liftMaybe)
 import Control.Monad.Reader (asks)
 import Ctl.Internal.Contract (getChainTip)
 import Ctl.Internal.Contract.Monad (Contract, getProvider)
 import Ctl.Internal.Helpers (liftM)
-import Ctl.Internal.Types.Chain as Chain
-import Ctl.Internal.Types.EraSummaries (EraSummaries(EraSummaries))
 import Ctl.Internal.Types.Interval
   ( POSIXTime(POSIXTime)
   , SlotToPosixTimeError(CannotFindSlotInEraSummaries)

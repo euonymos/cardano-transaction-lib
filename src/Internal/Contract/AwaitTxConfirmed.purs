@@ -9,6 +9,7 @@ import Prelude
 
 import Cardano.Types (Slot, TransactionHash, TransactionInput(TransactionInput))
 import Cardano.Types.BigNum as BigNum
+import Cardano.Types.Chain as Chain
 import Contract.Monad (liftedE)
 import Control.Monad.Reader.Class (asks)
 import Control.Parallel (parOneOf)
@@ -16,7 +17,6 @@ import Ctl.Internal.BalanceTx.Sync (syncWalletWithTransaction)
 import Ctl.Internal.Contract (getChainTip)
 import Ctl.Internal.Contract.Monad (Contract, getProvider)
 import Ctl.Internal.Contract.ProviderBackend (getBlockfrostBackend)
-import Ctl.Internal.Types.Chain as Chain
 import Data.Either (either)
 import Data.Maybe (isJust, maybe)
 import Data.Newtype (unwrap, wrap)

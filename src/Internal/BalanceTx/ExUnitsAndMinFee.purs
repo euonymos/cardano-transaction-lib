@@ -6,6 +6,10 @@ module Ctl.Internal.BalanceTx.ExUnitsAndMinFee
 import Prelude
 
 import Cardano.AsCbor (encodeCbor)
+import Cardano.Provider.TxEvaluation
+  ( TxEvaluationFailure(AdditionalUtxoOverlap, UnparsedError)
+  , TxEvaluationResult(TxEvaluationResult)
+  )
 import Cardano.Types
   ( Coin
   , CostModel
@@ -48,12 +52,7 @@ import Ctl.Internal.BalanceTx.Types
 import Ctl.Internal.Contract.MinFee (calculateMinFee) as Contract.MinFee
 import Ctl.Internal.Contract.Monad (getProvider)
 import Ctl.Internal.Helpers (liftEither, unsafeFromJust)
-import Ctl.Internal.QueryM.Ogmios
-  ( AdditionalUtxoSet
-  , TxEvaluationFailure(AdditionalUtxoOverlap)
-  , TxEvaluationResult(TxEvaluationResult)
-  ) as Ogmios
-import Ctl.Internal.QueryM.Ogmios (TxEvaluationFailure(UnparsedError))
+import Ctl.Internal.QueryM.Ogmios (AdditionalUtxoSet) as Ogmios
 import Ctl.Internal.Transaction (setScriptDataHash)
 import Ctl.Internal.TxOutput
   ( transactionInputToTxOutRef
@@ -83,7 +82,7 @@ import Effect.Class (liftEffect)
 
 evalTxExecutionUnits
   :: Transaction
-  -> BalanceTxM Ogmios.TxEvaluationResult
+  -> BalanceTxM TxEvaluationResult
 evalTxExecutionUnits tx = do
   additionalUtxos <- asksConstraints Constraints._additionalUtxos
   worker $ toOgmiosAdditionalUtxos additionalUtxos
@@ -95,12 +94,12 @@ evalTxExecutionUnits tx = do
           <$> (Map.toUnfoldable :: _ -> Array _) additionalUtxos
       )
 
-  worker :: Ogmios.AdditionalUtxoSet -> BalanceTxM Ogmios.TxEvaluationResult
+  worker :: Ogmios.AdditionalUtxoSet -> BalanceTxM TxEvaluationResult
   worker additionalUtxos = do
     provider <- liftContract getProvider
     evalResult' <-
       map unwrap <$> liftContract
-        (liftAff $ attempt $ provider.evaluateTx tx additionalUtxos)
+        (liftAff $ attempt $ provider.evaluateTx tx (unwrap additionalUtxos))
     case evalResult' of
       Left err | tx ^. _isValid ->
         liftAff $ throwError err
@@ -109,7 +108,7 @@ evalTxExecutionUnits tx = do
       Right evalResult ->
         case evalResult of
           Right a -> pure a
-          Left (Ogmios.AdditionalUtxoOverlap overlappingUtxos) ->
+          Left (AdditionalUtxoOverlap overlappingUtxos) ->
             -- Remove overlapping additional utxos and retry evaluation:
             worker $ wrap $ Map.filterKeys (flip Array.notElem overlappingUtxos)
               (unwrap additionalUtxos)
@@ -212,7 +211,7 @@ finalizeTransaction tx utxos = do
 
 updateTxExecutionUnits
   :: Transaction
-  -> Ogmios.TxEvaluationResult
+  -> TxEvaluationResult
   -> Maybe Transaction
 updateTxExecutionUnits tx result =
   getRedeemersExUnits result (tx ^. _witnessSet <<< _redeemers) <#>
@@ -220,10 +219,10 @@ updateTxExecutionUnits tx result =
       tx # _witnessSet <<< _redeemers .~ redeemers'
 
 getRedeemersExUnits
-  :: Ogmios.TxEvaluationResult
+  :: TxEvaluationResult
   -> Array Redeemer
   -> Maybe (Array Redeemer)
-getRedeemersExUnits (Ogmios.TxEvaluationResult result) redeemers = do
+getRedeemersExUnits (TxEvaluationResult result) redeemers = do
   for redeemers \indexedRedeemer -> do
     { memory, steps } <- Map.lookup
       { redeemerTag: (unwrap indexedRedeemer).tag

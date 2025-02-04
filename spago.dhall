@@ -20,6 +20,7 @@
   , "cardano-serialization-lib"
   , "cardano-transaction-builder"
   , "cardano-types"
+  , "cardano-provider"
   , "checked-exceptions"
   , "cip30"
   , "cip30-mock"

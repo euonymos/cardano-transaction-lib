@@ -3,6 +3,13 @@ module Test.Ctl.Ogmios.EvaluateTx (suite) where
 import Prelude
 
 import Aeson (JsonDecodeError(TypeMismatch))
+import Cardano.Provider.TxEvaluation
+  ( ExecutionUnits
+  , RedeemerPointer
+  , TxEvaluationFailure(UnparsedError, ScriptFailures)
+  , TxEvaluationR(TxEvaluationR)
+  , TxEvaluationResult(TxEvaluationResult)
+  )
 import Cardano.Types (BigNum)
 import Cardano.Types.BigNum as BigNum
 import Cardano.Types.RedeemerTag (RedeemerTag(Spend, Cert, Reward))
@@ -10,16 +17,11 @@ import Ctl.Internal.QueryM.JsonRpc2
   ( OgmiosDecodeError(ResultDecodingError)
   , decodeOgmios
   )
-import Ctl.Internal.QueryM.Ogmios
-  ( ExecutionUnits
-  , RedeemerPointer
-  , TxEvaluationFailure(UnparsedError, ScriptFailures)
-  , TxEvaluationR(TxEvaluationR)
-  , TxEvaluationResult(TxEvaluationResult)
-  )
+import Ctl.Internal.QueryM.Ogmios (OgmiosTxEvaluationR)
 import Data.Either (Either(Left, Right))
 import Data.Map as Map
 import Data.Maybe (fromJust)
+import Data.Newtype (unwrap)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -40,7 +42,9 @@ suite = do
     group "Decoding EvaluateTx response" do
       test "Successfully decodes a valid response" do
         txEvalR :: Either OgmiosDecodeError TxEvaluationR <-
-          decodeOgmios <$> liftEffect ogmiosEvaluateTxValidRespFixture
+          (map (\(r :: OgmiosTxEvaluationR) -> unwrap r) <<< decodeOgmios) <$>
+            liftEffect
+              ogmiosEvaluateTxValidRespFixture
         txEvalR `shouldSatisfy` case _ of
           Right (TxEvaluationR (Right (TxEvaluationResult map))) ->
             Map.toUnfoldable map ==
@@ -49,8 +53,9 @@ suite = do
 
       test "Fails to decode a response with invalid redeemer pointer format" do
         txEvalR :: Either OgmiosDecodeError TxEvaluationR <-
-          decodeOgmios <$> liftEffect
-            ogmiosEvaluateTxInvalidPointerFormatFixture
+          (map (\(r :: OgmiosTxEvaluationR) -> unwrap r) <<< decodeOgmios) <$>
+            liftEffect
+              ogmiosEvaluateTxInvalidPointerFormatFixture
         txEvalR `shouldSatisfy` case _ of
           Left (ResultDecodingError (TypeMismatch _)) -> true
           _ -> false
@@ -58,16 +63,18 @@ suite = do
       test "Successfully decodes a failed execution response (Incompatible era)"
         do
           txEvalR :: Either OgmiosDecodeError TxEvaluationR <-
-            decodeOgmios <$> liftEffect
-              ogmiosEvaluateTxFailIncompatibleEraFixture
+            (map (\(r :: OgmiosTxEvaluationR) -> unwrap r) <<< decodeOgmios) <$>
+              liftEffect
+                ogmiosEvaluateTxFailIncompatibleEraFixture
           txEvalR `shouldSatisfy` case _ of
             Right (TxEvaluationR (Left (UnparsedError _))) -> true
             _ -> false
 
       test "Successfully decodes a failed execution response (Script errors)" do
         txEvalR :: Either OgmiosDecodeError TxEvaluationR <-
-          decodeOgmios <$> liftEffect
-            ogmiosEvaluateTxFailScriptErrorsFixture
+          (map (\(r :: OgmiosTxEvaluationR) -> unwrap r) <<< decodeOgmios) <$>
+            liftEffect
+              ogmiosEvaluateTxFailScriptErrorsFixture
         txEvalR `shouldSatisfy` case _ of
           Right (TxEvaluationR (Left (ScriptFailures _))) -> true
           _ -> false

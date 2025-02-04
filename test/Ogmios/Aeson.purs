@@ -18,8 +18,8 @@ import Ctl.Internal.QueryM.JsonRpc2
   )
 import Ctl.Internal.QueryM.Ogmios
   ( HasTxR
+  , OgmiosTxEvaluationR
   , SubmitTxR
-  , TxEvaluationR
   , aesonObject
   )
 import Ctl.Internal.QueryM.Ogmios as O
@@ -64,7 +64,7 @@ tested =
   , ( "queryLedgerState/rewardAccountSummaries" /\ check
         (Proxy :: _ O.DelegationsAndRewardsR)
     )
-  , ("evaluateTransaction" /\ check (Proxy :: _ TxEvaluationR))
+  , ("evaluateTransaction" /\ check (Proxy :: _ OgmiosTxEvaluationR))
   , ("submitTransaction" /\ check (Proxy :: _ SubmitTxR))
   , ("hasTransaction" /\ check (Proxy :: _ HasTxR))
   , ("sizeOfMempool" /\ check (Proxy :: _ MempoolSizeAndCapacity))

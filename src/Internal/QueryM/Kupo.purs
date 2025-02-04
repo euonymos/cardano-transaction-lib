@@ -25,6 +25,14 @@ import Affjax (Error, Response, defaultRequest) as Affjax
 import Affjax.ResponseFormat (string) as Affjax.ResponseFormat
 import Affjax.StatusCode (StatusCode(StatusCode))
 import Cardano.AsCbor (decodeCbor, encodeCbor)
+import Cardano.Provider.Error
+  ( ClientError(ClientOtherError)
+  , GetTxMetadataError
+      ( GetTxMetadataClientError
+      , GetTxMetadataTxNotFoundError
+      , GetTxMetadataMetadataEmptyOrMissingError
+      )
+  )
 import Cardano.Serialization.Lib (fromBytes, toBytes)
 import Cardano.Types
   ( Address
@@ -60,16 +68,8 @@ import Control.Monad.Except.Trans (ExceptT(ExceptT), except, runExceptT)
 import Control.Monad.Reader.Class (asks)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.Affjax (request) as Affjax
-import Ctl.Internal.Contract.Provider.Error
-  ( GetTxMetadataError
-      ( GetTxMetadataClientError
-      , GetTxMetadataTxNotFoundError
-      , GetTxMetadataMetadataEmptyOrMissingError
-      )
-  )
 import Ctl.Internal.QueryM (QueryM, handleAffjaxResponse)
 import Ctl.Internal.ServerConfig (ServerConfig, mkHttpUrl)
-import Ctl.Internal.Service.Error (ClientError(ClientOtherError))
 import Ctl.Internal.Service.Helpers (aesonArray, aesonObject, aesonString)
 import Data.Array (uncons)
 import Data.Array as Array

@@ -22,6 +22,8 @@ module Ctl.Internal.Contract.Monad
 
 import Prelude
 
+import Cardano.Provider.Error (ClientError)
+import Cardano.Provider.Type (Provider)
 import Cardano.Types (NetworkId(TestnetId, MainnetId), TransactionHash, UtxoMap)
 import Contract.Prelude (liftEither)
 import Control.Alt (class Alt)
@@ -44,7 +46,6 @@ import Ctl.Internal.Contract.Provider
   , providerForCtlBackend
   , providerForSelfHostedBlockfrostBackend
   )
-import Ctl.Internal.Contract.Provider.Type (Provider)
 import Ctl.Internal.Contract.ProviderBackend
   ( CtlBackend
   , CtlBackendParams
@@ -70,7 +71,6 @@ import Ctl.Internal.Service.Blockfrost
   , runBlockfrostServiceM
   )
 import Ctl.Internal.Service.Blockfrost as Blockfrost
-import Ctl.Internal.Service.Error (ClientError)
 import Ctl.Internal.Types.ProtocolParameters (ProtocolParameters)
 import Ctl.Internal.Types.SystemStart (SystemStart)
 import Ctl.Internal.Types.UsedTxOuts (UsedTxOuts, isTxOutRefUsed, newUsedTxOuts)

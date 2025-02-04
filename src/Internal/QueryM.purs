@@ -63,8 +63,13 @@ import Affjax.RequestBody as Affjax.RequestBody
 import Affjax.RequestHeader as Affjax.RequestHeader
 import Affjax.ResponseFormat as Affjax.ResponseFormat
 import Affjax.StatusCode as Affjax.StatusCode
+import Cardano.Provider.Error
+  ( ClientError(ClientHttpError, ClientHttpResponseError, ClientDecodeJsonError)
+  , ServiceError(ServiceOtherError)
+  )
 import Cardano.Types (PlutusScript)
 import Cardano.Types.CborBytes (CborBytes)
+import Cardano.Types.Chain as Chain
 import Cardano.Types.PlutusScript as PlutusScript
 import Cardano.Types.TransactionHash (TransactionHash)
 import Cardano.Wallet.Key (PrivatePaymentKey, PrivateStakeKey)
@@ -134,6 +139,7 @@ import Ctl.Internal.QueryM.Ogmios
   , HasTxR
   , MaybeMempoolTransaction
   , OgmiosProtocolParameters
+  , OgmiosTxEvaluationR
   , PoolParametersR
   , ReleasedMempool
   , StakePoolsQueryArgument
@@ -149,11 +155,6 @@ import Ctl.Internal.ServerConfig
   , mkWsUrl
   ) as ExportServerConfig
 import Ctl.Internal.ServerConfig (ServerConfig, mkWsUrl)
-import Ctl.Internal.Service.Error
-  ( ClientError(ClientHttpError, ClientHttpResponseError, ClientDecodeJsonError)
-  , ServiceError(ServiceOtherError)
-  )
-import Ctl.Internal.Types.Chain as Chain
 import Ctl.Internal.Types.SystemStart (SystemStart)
 import Data.Bifunctor (lmap)
 import Data.ByteArray (byteArrayToHex)
@@ -325,7 +326,7 @@ submitTxOgmios txHash tx = do
     (txHash /\ tx)
 
 evaluateTxOgmios
-  :: CborBytes -> AdditionalUtxoSet -> QueryM Ogmios.TxEvaluationR
+  :: CborBytes -> AdditionalUtxoSet -> QueryM OgmiosTxEvaluationR
 evaluateTxOgmios cbor additionalUtxos = do
   ws <- asks $ underlyingWebSocket <<< _.ogmiosWs <<< _.runtime
   listeners' <- asks $ listeners <<< _.ogmiosWs <<< _.runtime
@@ -722,7 +723,7 @@ type OgmiosListeners =
   { chainTip :: ListenerSet Unit Ogmios.ChainTipQR
   , submit :: SubmitTxListenerSet
   , evaluate ::
-      ListenerSet (CborBytes /\ AdditionalUtxoSet) Ogmios.TxEvaluationR
+      ListenerSet (CborBytes /\ AdditionalUtxoSet) OgmiosTxEvaluationR
   , getProtocolParameters :: ListenerSet Unit OgmiosProtocolParameters
   , eraSummaries :: ListenerSet Unit Ogmios.OgmiosEraSummaries
   , currentEpoch :: ListenerSet Unit Ogmios.CurrentEpoch
