@@ -90,6 +90,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Changed
 
+- Bumped [cardano-node to v10.1.4](https://github.com/IntersectMBO/cardano-node/releases/tag/10.1.4) capable of crossing the second Chang hardfork ([#1657](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1657))
+- Bumped [Ogmios to v6.8.0](https://github.com/CardanoSolutions/ogmios/releases/tag/v6.8.0) ([#1657](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1657))
 - `cardano-serialization-lib` has been updated to `v13.2.0` ([#1656](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1656))
 - `QueryHandle` has been renamed to `Provider` ([#1665](https://github.com/Plutonomicon/cardano-transaction-lib/pull/1665))
   - `QueryBackend` renamed to `ProviderBackend`
