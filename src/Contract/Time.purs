@@ -173,7 +173,7 @@ normalizeTimeInterval = case _ of
 getCurrentEpoch :: Contract Epoch
 getCurrentEpoch = do
   provider <- getProvider
-  epoch <- liftAff $ provider.getCurrentEpoch
+  epoch <- liftAff provider.getCurrentEpoch
   map Epoch $ liftM (error "Unable to convert CurrentEpoch")
     $ UInt.fromString
     $ BigNum.toString (epoch :: BigNum)
