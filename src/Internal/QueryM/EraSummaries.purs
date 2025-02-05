@@ -9,7 +9,7 @@ import Cardano.Types.EraSummaries (EraSummaries)
 import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2 (pprintOgmiosDecodeError)
-import Ctl.Internal.QueryM.Ogmios (eraSummaries) as OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios (eraSummaries) as Ogmios
 import Data.Either (Either(Right, Left))
 import Data.Newtype (unwrap)
 import Effect.Exception (error)
@@ -18,7 +18,7 @@ import Effect.Exception (error)
 -- | https://ogmios.dev/api/ under "eraSummaries" query
 getEraSummaries :: QueryM EraSummaries
 getEraSummaries = do
-  resp <- OgmiosHttp.eraSummaries
+  resp <- Ogmios.eraSummaries
   case resp of
     Left err -> throwError $ error $ pprintOgmiosDecodeError err
     Right val -> pure $ unwrap $ val

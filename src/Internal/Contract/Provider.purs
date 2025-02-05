@@ -16,8 +16,8 @@ import Ctl.Internal.Contract.LogParams (LogParams)
 import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend, CtlBackend)
 import Ctl.Internal.Helpers (logWithLevel)
 import Ctl.Internal.QueryM (QueryM)
-import Ctl.Internal.QueryM.CurrentEpoch (getCurrentEpoch) as OgmiosHttp
-import Ctl.Internal.QueryM.EraSummaries (getEraSummaries) as OgmiosHttp
+import Ctl.Internal.QueryM.CurrentEpoch (getCurrentEpoch) as Ogmios
+import Ctl.Internal.QueryM.EraSummaries (getEraSummaries) as Ogmios
 import Ctl.Internal.QueryM.Kupo
   ( getDatumByHash
   , getOutputAddressesByTxHash
@@ -31,13 +31,13 @@ import Ctl.Internal.QueryM.Ogmios
   ( evaluateTxOgmios
   , getChainTip
   , submitTxOgmios
-  ) as OgmiosHttp
+  ) as Ogmios
 import Ctl.Internal.QueryM.Ogmios.Types (SubmitTxR(SubmitFail, SubmitTxSuccess))
 import Ctl.Internal.QueryM.Pools
   ( getPoolIds
   , getPubKeyHashDelegationsAndRewards
   , getValidatorHashDelegationsAndRewards
-  ) as OgmiosHttp
+  ) as Ogmios
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM
   , runBlockfrostServiceM
@@ -63,13 +63,13 @@ providerForCtlBackend runQueryM params backend =
   , doesTxExist: runQueryM' <<< map (map isJust) <<< Kupo.isTxConfirmed
   , getTxAuxiliaryData: runQueryM' <<< Kupo.getTxAuxiliaryData
   , utxosAt: runQueryM' <<< Kupo.utxosAt
-  , getChainTip: Right <$> runQueryM' OgmiosHttp.getChainTip
-  , getCurrentEpoch: unwrap <$> runQueryM' OgmiosHttp.getCurrentEpoch
+  , getChainTip: Right <$> runQueryM' Ogmios.getChainTip
+  , getCurrentEpoch: unwrap <$> runQueryM' Ogmios.getCurrentEpoch
   , submitTx: \tx -> runQueryM' do
       let txHash = Transaction.hash tx
       logDebug' $ "Pre-calculated tx hash: " <> show txHash
       let txCborBytes = encodeCbor tx
-      result <- OgmiosHttp.submitTxOgmios txHash txCborBytes
+      result <- Ogmios.submitTxOgmios txHash txCborBytes
       pure $ case result of
         SubmitTxSuccess th -> do
           if th == txHash then Right th
@@ -81,15 +81,15 @@ providerForCtlBackend runQueryM params backend =
   , evaluateTx: \tx additionalUtxos ->
       runQueryM' do
         let txBytes = encodeCbor tx
-        OgmiosHttp.evaluateTxOgmios txBytes (wrap additionalUtxos)
-  , getEraSummaries: Right <$> runQueryM' OgmiosHttp.getEraSummaries
-  , getPoolIds: Right <$> runQueryM' OgmiosHttp.getPoolIds
+        Ogmios.evaluateTxOgmios txBytes (wrap additionalUtxos)
+  , getEraSummaries: Right <$> runQueryM' Ogmios.getEraSummaries
+  , getPoolIds: Right <$> runQueryM' Ogmios.getPoolIds
   , getPubKeyHashDelegationsAndRewards: \_ pubKeyHash ->
       Right <$> runQueryM'
-        (OgmiosHttp.getPubKeyHashDelegationsAndRewards pubKeyHash)
+        (Ogmios.getPubKeyHashDelegationsAndRewards pubKeyHash)
   , getValidatorHashDelegationsAndRewards: \_ validatorHash ->
       Right <$> runQueryM'
-        (OgmiosHttp.getValidatorHashDelegationsAndRewards $ wrap validatorHash)
+        (Ogmios.getValidatorHashDelegationsAndRewards $ wrap validatorHash)
   }
 
   where

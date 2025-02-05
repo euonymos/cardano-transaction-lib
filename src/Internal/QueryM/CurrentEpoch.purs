@@ -8,7 +8,7 @@ import Prelude
 import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2 (pprintOgmiosDecodeError)
-import Ctl.Internal.QueryM.Ogmios (currentEpoch) as OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios (currentEpoch) as Ogmios
 import Ctl.Internal.QueryM.Ogmios.Types (CurrentEpoch)
 import Data.Either (Either(Right, Left))
 import Effect.Exception (error)
@@ -17,7 +17,7 @@ import Effect.Exception (error)
 -- | "currentEpoch" query
 getCurrentEpoch :: QueryM CurrentEpoch
 getCurrentEpoch = do
-  resp <- OgmiosHttp.currentEpoch
+  resp <- Ogmios.currentEpoch
   case resp of
     Left err -> throwError $ error $ pprintOgmiosDecodeError err
     Right val -> pure val

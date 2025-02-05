@@ -17,7 +17,7 @@ import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.Helpers (liftM)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2 (pprintOgmiosDecodeError)
-import Ctl.Internal.QueryM.Ogmios as OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios as Ogmios
 import Ctl.Internal.QueryM.Ogmios.Types (PoolParameters)
 import Ctl.Internal.Types.StakeValidatorHash (StakeValidatorHash)
 import Data.ByteArray (byteArrayToHex)
@@ -36,7 +36,7 @@ getStakePools
   :: Maybe (Array PoolPubKeyHash)
   -> QueryM (Map PoolPubKeyHash PoolParameters)
 getStakePools selected = do
-  resp <- OgmiosHttp.poolParameters $ wrap selected
+  resp <- Ogmios.poolParameters $ wrap selected
   case resp of
     Left err -> throwError $ error $ pprintOgmiosDecodeError err
     Right val -> pure $ unwrap val
@@ -71,7 +71,7 @@ getPoolsParameters poolPubKeyHashes = do
 getValidatorHashDelegationsAndRewards
   :: StakeValidatorHash -> QueryM (Maybe DelegationsAndRewards)
 getValidatorHashDelegationsAndRewards skh = do
-  resp <- OgmiosHttp.delegationsAndRewards [ stringRep ]
+  resp <- Ogmios.delegationsAndRewards [ stringRep ]
   case resp of
     Left err -> throwError $ error $ pprintOgmiosDecodeError err
     Right val -> pure $ Map.lookup byteHex $ unwrap val
@@ -86,7 +86,7 @@ getValidatorHashDelegationsAndRewards skh = do
 getPubKeyHashDelegationsAndRewards
   :: StakePubKeyHash -> QueryM (Maybe DelegationsAndRewards)
 getPubKeyHashDelegationsAndRewards pkh = do
-  resp <- OgmiosHttp.delegationsAndRewards [ stringRep ]
+  resp <- Ogmios.delegationsAndRewards [ stringRep ]
   case resp of
     Left err -> throwError $ error $ pprintOgmiosDecodeError err
     Right val -> pure $ Map.lookup byteHex $ unwrap val
