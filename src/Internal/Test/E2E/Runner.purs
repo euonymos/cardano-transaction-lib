@@ -24,7 +24,7 @@ import Ctl.Internal.Affjax (request) as Affjax
 import Ctl.Internal.Contract.Hooks (emptyHooks)
 import Ctl.Internal.Contract.ProviderBackend (ProviderBackend(CtlBackend))
 import Ctl.Internal.Helpers (liftedM, unsafeFromJust, (<</>>))
-import Ctl.Internal.QueryM.Ogmios.QueryEnv (ClusterSetup)
+import Ctl.Internal.QueryM (ClusterSetup)
 import Ctl.Internal.Test.E2E.Browser (withBrowser)
 import Ctl.Internal.Test.E2E.Feedback
   ( BrowserEvent(ConfirmAccess, Sign, Success, Failure)

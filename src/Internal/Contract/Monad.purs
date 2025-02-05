@@ -55,7 +55,7 @@ import Ctl.Internal.Contract.ProviderBackend
   )
 import Ctl.Internal.Helpers (filterMapWithKeyM, liftM, logWithLevel)
 import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
-import Ctl.Internal.QueryM (QueryM)
+import Ctl.Internal.QueryM (QueryEnv, QueryM)
 import Ctl.Internal.QueryM.Kupo (isTxConfirmedAff)
 import Ctl.Internal.QueryM.Ogmios (getProtocolParameters, getSystemStartTime)
 import Ctl.Internal.QueryM.Ogmios.JsWebSocket (_wsClose, _wsFinalize)
@@ -64,7 +64,6 @@ import Ctl.Internal.QueryM.Ogmios.Mempool
   , mkOgmiosWebSocketAff
   , underlyingWebSocket
   )
-import Ctl.Internal.QueryM.Ogmios.QueryEnv (QueryEnv)
 import Ctl.Internal.QueryM.Ogmios.Types
   ( OgmiosDecodeError
   , pprintOgmiosDecodeError

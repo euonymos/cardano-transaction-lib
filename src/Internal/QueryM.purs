@@ -2,6 +2,9 @@
 -- | This module defines an Aff interface for backend queries.
 module Ctl.Internal.QueryM
   ( QueryM
+  , QueryEnv
+  , QueryConfig
+  , ClusterSetup
   , ParQueryM
   , QueryMT(QueryMT)
   , handleAffjaxResponse
@@ -16,6 +19,7 @@ import Cardano.Provider.Error
   ( ClientError(ClientHttpError, ClientHttpResponseError, ClientDecodeJsonError)
   , ServiceError(ServiceOtherError)
   )
+import Cardano.Wallet.Key (PrivatePaymentKey, PrivateStakeKey)
 import Control.Alt (class Alt)
 import Control.Alternative (class Alternative)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow)
@@ -26,15 +30,51 @@ import Control.Monad.Rec.Class (class MonadRec)
 import Control.Parallel (class Parallel, parallel, sequential)
 import Control.Plus (class Plus)
 import Ctl.Internal.Helpers (logWithLevel)
-import Ctl.Internal.QueryM.Ogmios.QueryEnv (QueryEnv)
+import Ctl.Internal.QueryM.Ogmios.QueryEnv (QueryRuntime)
+import Ctl.Internal.ServerConfig (ServerConfig)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(Left, Right))
-import Data.Maybe (fromMaybe)
+import Data.Log.Level (LogLevel)
+import Data.Log.Message (Message)
+import Data.Maybe (Maybe, fromMaybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Effect.Aff (Aff, ParAff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
 import Effect.Exception (Error)
+
+-- | Cluster setup contains everything that is needed to run a `Contract` on
+-- | a local cluster: paramters to connect to the services and private keys
+-- | that are pre-funded with Ada on that cluster
+type ClusterSetup =
+  { ogmiosConfig :: ServerConfig
+  , kupoConfig :: ServerConfig
+  , keys ::
+      { payment :: PrivatePaymentKey
+      , stake :: Maybe PrivateStakeKey
+      }
+  }
+
+-- | `QueryConfig` contains a complete specification on how to initialize a
+-- | `QueryM` environment.
+-- | It includes:
+-- | - server parameters for all the services
+-- | - network ID
+-- | - logging level
+-- | - optional custom logger
+type QueryConfig =
+  { ogmiosConfig :: ServerConfig
+  , kupoConfig :: ServerConfig
+  , logLevel :: LogLevel
+  , customLogger :: Maybe (LogLevel -> Message -> Aff Unit)
+  , suppressLogs :: Boolean
+  }
+
+-- | `QueryEnv` contains everything needed for `QueryM` to run.
+type QueryEnv =
+  { config :: QueryConfig
+  , runtime :: QueryRuntime
+  }
 
 type QueryM = QueryMT Aff
 
