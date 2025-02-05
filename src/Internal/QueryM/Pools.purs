@@ -13,15 +13,15 @@ import Cardano.Types (PoolParams, PoolPubKeyHash, StakePubKeyHash)
 import Cardano.Types.DelegationsAndRewards (DelegationsAndRewards)
 import Cardano.Types.Ed25519KeyHash (toBech32Unsafe) as Ed25519KeyHash
 import Cardano.Types.ScriptHash as ScriptHash
+import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.Helpers (liftM)
-import Ctl.Internal.QueryM (QueryM, mkOgmiosRequest)
-import Ctl.Internal.QueryM.Ogmios
-  ( DelegationsAndRewardsR(DelegationsAndRewardsR)
-  , PoolParameters
-  )
-import Ctl.Internal.QueryM.Ogmios as Ogmios
+import Ctl.Internal.QueryM (QueryM)
+import Ctl.Internal.QueryM.JsonRpc2 (pprintOgmiosDecodeError)
+import Ctl.Internal.QueryM.Ogmios (PoolParameters)
+import Ctl.Internal.QueryM.OgmiosHttp as OgmiosHttp
 import Ctl.Internal.Types.StakeValidatorHash (StakeValidatorHash)
 import Data.ByteArray (byteArrayToHex)
+import Data.Either (Either(Right, Left))
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(Nothing, Just))
@@ -35,10 +35,11 @@ import Record.Builder (build, merge)
 getStakePools
   :: Maybe (Array PoolPubKeyHash)
   -> QueryM (Map PoolPubKeyHash PoolParameters)
-getStakePools selected = unwrap <$>
-  mkOgmiosRequest Ogmios.queryStakePoolsCall
-    _.stakePools
-    (wrap selected)
+getStakePools selected = do
+  resp <- OgmiosHttp.poolParameters $ wrap selected
+  case resp of
+    Left err -> throwError $ error $ pprintOgmiosDecodeError err
+    Right val -> pure $ unwrap val
 
 getPoolIds :: QueryM (Array PoolPubKeyHash)
 getPoolIds = (Map.toUnfoldableUnordered >>> map fst) <$>
@@ -70,11 +71,10 @@ getPoolsParameters poolPubKeyHashes = do
 getValidatorHashDelegationsAndRewards
   :: StakeValidatorHash -> QueryM (Maybe DelegationsAndRewards)
 getValidatorHashDelegationsAndRewards skh = do
-  DelegationsAndRewardsR mp <- mkOgmiosRequest Ogmios.queryDelegationsAndRewards
-    _.delegationsAndRewards
-    [ stringRep
-    ]
-  pure $ Map.lookup byteHex mp
+  resp <- OgmiosHttp.delegationsAndRewards [ stringRep ]
+  case resp of
+    Left err -> throwError $ error $ pprintOgmiosDecodeError err
+    Right val -> pure $ Map.lookup byteHex $ unwrap val
   where
   stringRep :: String
   stringRep = unsafePartial $ ScriptHash.toBech32Unsafe "script" $ unwrap skh
@@ -86,10 +86,10 @@ getValidatorHashDelegationsAndRewards skh = do
 getPubKeyHashDelegationsAndRewards
   :: StakePubKeyHash -> QueryM (Maybe DelegationsAndRewards)
 getPubKeyHashDelegationsAndRewards pkh = do
-  DelegationsAndRewardsR mp <- mkOgmiosRequest Ogmios.queryDelegationsAndRewards
-    _.delegationsAndRewards
-    [ stringRep ]
-  pure $ Map.lookup byteHex mp
+  resp <- OgmiosHttp.delegationsAndRewards [ stringRep ]
+  case resp of
+    Left err -> throwError $ error $ pprintOgmiosDecodeError err
+    Right val -> pure $ Map.lookup byteHex $ unwrap val
   where
   stringRep :: String
   stringRep = unsafePartial

@@ -13,7 +13,7 @@ import Prelude
 import Aeson (decodeAeson, encodeAeson, jsonToAeson, stringifyAeson)
 import Ctl.Internal.FfiHelpers (MaybeFfiHelper, maybeFfiHelper)
 import Ctl.Internal.Helpers (liftedM)
-import Ctl.Internal.QueryM (ClusterSetup)
+import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (ClusterSetup)
 import Ctl.Internal.Test.E2E.Feedback (BrowserEvent)
 import Data.Argonaut (Json)
 import Data.Either (hush)

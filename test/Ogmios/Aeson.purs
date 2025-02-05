@@ -7,7 +7,6 @@ import Prelude
 
 import Aeson (Aeson, JsonDecodeError, encodeAeson, printJsonDecodeError)
 import Aeson as Aeson
-import Contract.Backend.Ogmios.Mempool (MempoolSizeAndCapacity)
 import Control.Monad.Error.Class (liftEither)
 import Control.Monad.Trans.Class (lift)
 import Control.Parallel (parTraverse)
@@ -67,7 +66,7 @@ tested =
   , ("evaluateTransaction" /\ check (Proxy :: _ OgmiosTxEvaluationR))
   , ("submitTransaction" /\ check (Proxy :: _ SubmitTxR))
   , ("hasTransaction" /\ check (Proxy :: _ HasTxR))
-  , ("sizeOfMempool" /\ check (Proxy :: _ MempoolSizeAndCapacity))
+  , ("sizeOfMempool" /\ check (Proxy :: _ O.MempoolSizeAndCapacity))
   -- ignoring because response may lack tx cbor if not run with flag
   -- This endpoint is tested with "fetchMempoolTXs" test (Test.Ctl.Plutip.Contract.OgmiosMempool)
   -- , ("nextTransaction" /\ (Proxy :: _ MaybeMempoolTransaction ))

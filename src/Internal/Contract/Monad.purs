@@ -54,18 +54,21 @@ import Ctl.Internal.Contract.ProviderBackend
   , getCtlBackend
   )
 import Ctl.Internal.Helpers (filterMapWithKeyM, liftM, logWithLevel)
-import Ctl.Internal.JsWebSocket (_wsClose, _wsFinalize)
 import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
-import Ctl.Internal.QueryM
-  ( QueryEnv
-  , QueryM
-  , WebSocket
-  , getProtocolParametersAff
-  , getSystemStartAff
+import Ctl.Internal.QueryM (QueryM)
+import Ctl.Internal.QueryM.JsonRpc2 (OgmiosDecodeError, pprintOgmiosDecodeError)
+import Ctl.Internal.QueryM.Kupo (isTxConfirmedAff)
+import Ctl.Internal.QueryM.OgmiosHttp
+  ( getProtocolParameters
+  , getSystemStartTime
+  )
+import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket (_wsClose, _wsFinalize)
+import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (QueryEnv)
+import Ctl.Internal.QueryM.OgmiosWebsocket.Types
+  ( WebSocket
   , mkOgmiosWebSocketAff
   , underlyingWebSocket
   )
-import Ctl.Internal.QueryM.Kupo (isTxConfirmedAff)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM
   , runBlockfrostServiceM
@@ -290,10 +293,32 @@ getLedgerConstants
   -> ProviderBackend
   -> Aff LedgerConstants
 getLedgerConstants params = case _ of
-  CtlBackend { ogmios: { ws } } _ ->
-    { pparams: _, systemStart: _ }
-      <$> (unwrap <$> getProtocolParametersAff ws logger)
-      <*> getSystemStartAff ws logger
+  CtlBackend ctlBackend _ -> do
+    let
+      logParams =
+        { logLevel: params.logLevel
+        , customLogger: params.customLogger
+        , suppressLogs: true
+        }
+    pparams <- unwrap <$>
+      ( runQueryM logParams ctlBackend getProtocolParameters >>=
+          throwOnLeft
+      )
+    systemStart <- unwrap <$>
+      ( runQueryM logParams ctlBackend getSystemStartTime >>=
+          throwOnLeft
+      )
+    pure { pparams, systemStart }
+
+    where
+    throwOnLeft
+      :: forall a
+       . Either OgmiosDecodeError a
+      -> Aff a
+    throwOnLeft = case _ of
+      Left err -> throwError $ error $ pprintOgmiosDecodeError err
+      Right x -> pure x
+
   BlockfrostBackend backend _ ->
     runBlockfrostServiceM blockfrostLogger backend $
       { pparams: _, systemStart: _ }
@@ -458,7 +483,8 @@ mkQueryEnv
   :: forall (rest :: Row Type). LogParams rest -> CtlBackend -> QueryEnv
 mkQueryEnv params ctlBackend =
   { config:
-      { kupoConfig: ctlBackend.kupoConfig
+      { ogmiosConfig: ctlBackend.ogmios.config
+      , kupoConfig: ctlBackend.kupoConfig
       , logLevel: params.logLevel
       , customLogger: params.customLogger
       , suppressLogs: params.suppressLogs
@@ -480,3 +506,4 @@ filterLockedUtxos utxos =
 
 withTxRefsCache :: forall (a :: Type). ReaderT UsedTxOuts Aff a -> Contract a
 withTxRefsCache = Contract <<< withReaderT _.usedTxOuts
+

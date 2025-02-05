@@ -6,8 +6,7 @@ import Prelude
 
 import Cardano.Types.BigNum as BigNum
 import Contract.Backend.Ogmios.Mempool
-  ( MempoolSizeAndCapacity(MempoolSizeAndCapacity)
-  , acquireMempoolSnapshot
+  ( acquireMempoolSnapshot
   , fetchMempoolTxs
   , mempoolSnapshotHasTx
   , mempoolSnapshotSizeAndCapacity
@@ -18,6 +17,9 @@ import Contract.Test (ContractTest, InitialUTxOs, withKeyWallet, withWallets)
 import Contract.Test.Mote (TestPlanM)
 import Contract.Transaction (awaitTxConfirmed)
 import Ctl.Examples.PlutusV2.InlineDatum as InlineDatum
+import Ctl.Internal.QueryM.Ogmios
+  ( MempoolSizeAndCapacity(MempoolSizeAndCapacity)
+  )
 import Data.Array (length)
 import Mote (group, skip, test)
 import Test.Spec.Assertions (shouldEqual)

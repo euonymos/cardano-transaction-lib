@@ -7,7 +7,13 @@ import Prelude
 import Aeson (class EncodeAeson, Aeson, encodeAeson, stringifyAeson)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.Helpers (logString)
-import Ctl.Internal.JsWebSocket
+import Ctl.Internal.QueryM.JsonRpc2 (class DecodeOgmios, JsonRpc2Call)
+import Ctl.Internal.QueryM.Ogmios (mkOgmiosCallType)
+import Ctl.Internal.QueryM.OgmiosWebsocket.Dispatcher
+  ( WebsocketDispatch
+  , mkWebsocketDispatch
+  )
+import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket
   ( _mkWebSocket
   , _onWsConnect
   , _onWsError
@@ -15,19 +21,18 @@ import Ctl.Internal.JsWebSocket
   , _wsClose
   , _wsSend
   )
-import Ctl.Internal.QueryM
+import Ctl.Internal.QueryM.OgmiosWebsocket.Types
   ( ListenerSet
   , WebSocket(WebSocket)
-  , WebsocketDispatch
   , defaultMessageListener
-  , defaultOgmiosWsConfig
   , mkListenerSet
   , mkRequestAff
-  , mkWebsocketDispatch
   )
-import Ctl.Internal.QueryM.JsonRpc2 (class DecodeOgmios, JsonRpc2Call)
-import Ctl.Internal.QueryM.Ogmios (mkOgmiosCallType)
-import Ctl.Internal.ServerConfig (ServerConfig, mkWsUrl)
+import Ctl.Internal.ServerConfig
+  ( ServerConfig
+  , defaultOgmiosWsConfig
+  , mkWsUrl
+  )
 import Data.Either (Either(Left, Right))
 import Data.Log.Level (LogLevel(Trace, Debug))
 import Data.Map as Map

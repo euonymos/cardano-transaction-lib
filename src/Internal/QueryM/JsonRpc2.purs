@@ -8,7 +8,12 @@ module Ctl.Internal.QueryM.JsonRpc2
   , JsonRpc2Response
   , decodeResult
   , ogmiosDecodeErrorToError
-  , OgmiosDecodeError(ResultDecodingError, InvalidResponse, ErrorResponse)
+  , OgmiosDecodeError
+      ( ResultDecodingError
+      , ClientErrorResponse
+      , InvalidResponse
+      , ErrorResponse
+      )
   , OgmiosError(OgmiosError)
   , class DecodeOgmios
   , decodeOgmios
@@ -34,6 +39,7 @@ import Aeson
   , printJsonDecodeError
   , stringifyAeson
   )
+import Cardano.Provider.Error (ClientError, pprintClientError)
 import Ctl.Internal.QueryM.UniqueId (ListenerId, uniqueId)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(Left, Right))
@@ -147,6 +153,8 @@ data OgmiosDecodeError
   -- Server responded with error.
   = ErrorResponse (Maybe OgmiosError)
   -- Server responded with result, parsing of which failed
+  | ClientErrorResponse ClientError
+  -- Server responded with result, parsing of which failed
   | ResultDecodingError JsonDecodeError
   -- Received JsonRpc2Response was not of the right format.
   | InvalidResponse JsonDecodeError
@@ -159,6 +167,8 @@ instance Show OgmiosDecodeError where
 pprintOgmiosDecodeError :: OgmiosDecodeError -> String
 pprintOgmiosDecodeError (ErrorResponse err) = "Ogmios responded with error: " <>
   maybe "<Actually no response>" pprintOgmiosError err
+pprintOgmiosDecodeError (ClientErrorResponse err) =
+  "Ogmios responded with error: " <> pprintClientError err
 pprintOgmiosDecodeError (ResultDecodingError err) =
   "Failed to parse the result: " <> printJsonDecodeError err
 pprintOgmiosDecodeError (InvalidResponse err) =
