@@ -39,7 +39,10 @@ import Affjax.ResponseFormat (string) as Affjax.ResponseFormat
 import Affjax.StatusCode (StatusCode(StatusCode))
 import Affjax.StatusCode as Affjax.StatusCode
 import Cardano.AsCbor (encodeCbor)
-import Cardano.Provider.Error (ClientError(..), ServiceError(..))
+import Cardano.Provider.Error
+  ( ClientError(ClientHttpError, ClientHttpResponseError)
+  , ServiceError(ServiceOtherError)
+  )
 import Cardano.Provider.TxEvaluation as Provider
 import Cardano.Serialization.Lib (fromBytes)
 import Cardano.Types
@@ -56,10 +59,10 @@ import Cardano.Types.Chain as Chain
 import Cardano.Types.Coin (Coin(Coin))
 import Cardano.Types.CostModel (CostModel(CostModel))
 import Cardano.Types.EraSummaries
-  ( EraSummaries(..)
-  , EraSummary(..)
-  , EraSummaryParameters(..)
-  , EraSummaryTime(..)
+  ( EraSummaries(EraSummaries)
+  , EraSummary(EraSummary)
+  , EraSummaryParameters(EraSummaryParameters)
+  , EraSummaryTime(EraSummaryTime)
   )
 import Cardano.Types.ExUnitPrices (ExUnitPrices(ExUnitPrices))
 import Cardano.Types.ExUnits (ExUnits(ExUnits))
@@ -93,7 +96,7 @@ import Ctl.Internal.Helpers (encodeMap, showWithParens)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2
   ( class DecodeOgmios
-  , OgmiosDecodeError(..)
+  , OgmiosDecodeError(ClientErrorResponse, ResultDecodingError)
   , OgmiosError
   , decodeErrorOrResult
   , decodeOgmios

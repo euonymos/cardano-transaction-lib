@@ -16,7 +16,7 @@ import Effect.Exception (error)
 -- | Get the current Epoch. Details can be found https://ogmios.dev/api/ under
 -- | "currentEpoch" query
 getCurrentEpoch :: QueryM CurrentEpoch
-getCurrentEpoch =  do
+getCurrentEpoch = do
   resp <- OgmiosHttp.currentEpoch
   case resp of
     Left err -> throwError $ error $ pprintOgmiosDecodeError err

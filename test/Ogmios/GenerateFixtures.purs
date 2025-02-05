@@ -8,7 +8,6 @@ import Aeson (class EncodeAeson, Aeson, encodeAeson, stringifyAeson)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.Helpers (logString)
 import Ctl.Internal.QueryM.JsonRpc2 (class DecodeOgmios, JsonRpc2Call)
-import Ctl.Internal.QueryM.Ogmios (mkOgmiosCallType)
 import Ctl.Internal.QueryM.OgmiosWebsocket.Dispatcher
   ( WebsocketDispatch
   , mkWebsocketDispatch
@@ -21,11 +20,12 @@ import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket
   , _wsClose
   , _wsSend
   )
-import Ctl.Internal.QueryM.OgmiosWebsocket.Types
+import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
   ( ListenerSet
   , WebSocket(WebSocket)
   , defaultMessageListener
   , mkListenerSet
+  , mkOgmiosCallType
   , mkRequestAff
   )
 import Ctl.Internal.ServerConfig

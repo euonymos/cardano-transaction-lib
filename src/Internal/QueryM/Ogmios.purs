@@ -26,14 +26,7 @@ module Ctl.Internal.QueryM.Ogmios
   , OgmiosTxEvaluationR(OgmiosTxEvaluationR)
   , aesonObject
   , aesonArray
-  , acquireMempoolSnapshotCall
   , evaluateTxCall
-  , mempoolSnapshotHasTxCall
-  , mempoolSnapshotNextTxCall
-  , mempoolSnapshotSizeAndCapacityCall
-  , mkOgmiosCallType
-  , mkOgmiosCallTypeNoArgs
-  , releaseMempoolCall
   , submitSuccessPartialResp
   , parseIpv6String
   , rationalToSubcoin
@@ -203,46 +196,8 @@ evaluateTxCall = mkOgmiosCallType
   }
 
 --------------------------------------------------------------------------------
--- Local Tx Monitor Protocol
--- https://ogmios.dev/mini-protocols/local-tx-monitor/
---------------------------------------------------------------------------------
-
-acquireMempoolSnapshotCall :: JsonRpc2Call Unit MempoolSnapshotAcquired
-acquireMempoolSnapshotCall =
-  mkOgmiosCallTypeNoArgs "acquireMempool"
-
-mempoolSnapshotHasTxCall
-  :: MempoolSnapshotAcquired -> JsonRpc2Call TransactionHash HasTxR
-mempoolSnapshotHasTxCall _ = mkOgmiosCallType
-  { method: "hasTransaction"
-  , params: { id: _ }
-  }
-
-mempoolSnapshotNextTxCall
-  :: MempoolSnapshotAcquired -> JsonRpc2Call Unit MaybeMempoolTransaction
-mempoolSnapshotNextTxCall _ = mkOgmiosCallType
-  { method: "nextTransaction"
-  , params: const { fields: "all" }
-  }
-
-mempoolSnapshotSizeAndCapacityCall
-  :: MempoolSnapshotAcquired -> JsonRpc2Call Unit MempoolSizeAndCapacity
-mempoolSnapshotSizeAndCapacityCall _ =
-  mkOgmiosCallTypeNoArgs "sizeOfMempool"
-
-releaseMempoolCall
-  :: MempoolSnapshotAcquired -> JsonRpc2Call Unit ReleasedMempool
-releaseMempoolCall _ =
-  mkOgmiosCallTypeNoArgs "releaseMempool"
-
---------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------
-
-mkOgmiosCallTypeNoArgs
-  :: forall (o :: Type). DecodeOgmios o => String -> JsonRpc2Call Unit o
-mkOgmiosCallTypeNoArgs method =
-  mkOgmiosCallType { method, params: const {} }
 
 mkOgmiosCallType
   :: forall (a :: Type) (i :: Type) (o :: Type)

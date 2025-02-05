@@ -33,12 +33,12 @@ import Ctl.Internal.Helpers (logWithLevel)
 import Ctl.Internal.Logging (mkLogger)
 import Ctl.Internal.QueryM.Ogmios (AdditionalUtxoSet, OgmiosTxEvaluationR)
 import Ctl.Internal.QueryM.Ogmios as Ogmios
-import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (QueryEnv)
-import Ctl.Internal.QueryM.OgmiosWebsocket.Types
+import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
   ( listeners
   , mkRequestAff
   , underlyingWebSocket
   )
+import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (QueryEnv)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(Left, Right))
 import Data.Maybe (fromMaybe)

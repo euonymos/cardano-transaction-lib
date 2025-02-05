@@ -63,12 +63,12 @@ import Ctl.Internal.QueryM.OgmiosHttp
   , getSystemStartTime
   )
 import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket (_wsClose, _wsFinalize)
-import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (QueryEnv)
-import Ctl.Internal.QueryM.OgmiosWebsocket.Types
+import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
   ( WebSocket
   , mkOgmiosWebSocketAff
   , underlyingWebSocket
   )
+import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (QueryEnv)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM
   , runBlockfrostServiceM

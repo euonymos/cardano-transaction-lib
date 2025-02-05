@@ -23,7 +23,7 @@ import Ctl.Internal.QueryM.OgmiosWebsocket.Dispatcher
   , newDispatcher
   , newPendingRequests
   ) as ExportDispatcher
-import Ctl.Internal.QueryM.OgmiosWebsocket.Types (OgmiosWebSocket)
+import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool (OgmiosWebSocket)
 import Ctl.Internal.ServerConfig
   ( Host
   , ServerConfig

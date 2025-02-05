@@ -27,20 +27,18 @@ import Ctl.Internal.QueryM.Ogmios
   ( MempoolSizeAndCapacity
   , MempoolSnapshotAcquired
   , MempoolTransaction(MempoolTransaction)
-  , acquireMempoolSnapshotCall
   ) as Ogmios
 import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket (JsWebSocket)
 import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
-  ( mempoolSnapshotHasTxCall
-  , mempoolSnapshotNextTxCall
-  , mempoolSnapshotSizeAndCapacityCall
-  , releaseMempoolCall
-  )
-import Ctl.Internal.QueryM.OgmiosWebsocket.Types
   ( ListenerSet
   , OgmiosListeners
+  , acquireMempoolSnapshotCall
   , listeners
+  , mempoolSnapshotHasTxCall
+  , mempoolSnapshotNextTxCall
+  , mempoolSnapshotSizeAndCapacityCall
   , mkRequestAff
+  , releaseMempoolCall
   , underlyingWebSocket
   )
 import Data.Array as Array
@@ -118,7 +116,7 @@ acquireMempoolSnapshotFetch
   :: QueryM Ogmios.MempoolSnapshotAcquired
 acquireMempoolSnapshotFetch =
   mkOgmiosRequest
-    Ogmios.acquireMempoolSnapshotCall
+    acquireMempoolSnapshotCall
     _.acquireMempool
     unit
 
