@@ -9,7 +9,7 @@ module Ctl.Internal.QueryM.OgmiosHttp
   , delegationsAndRewards
   , eraSummaries
   , getProtocolParameters
-  -- , evaluateTxOgmios
+  , evaluateTxOgmios
   ) where
 
 import Prelude
@@ -104,11 +104,13 @@ import Ctl.Internal.QueryM.JsonRpc2
   , pprintOgmiosDecodeError
   )
 import Ctl.Internal.QueryM.Ogmios
-  ( CurrentEpoch
+  ( AdditionalUtxoSet
+  , CurrentEpoch
   , DelegationsAndRewardsR(DelegationsAndRewardsR)
   , OgmiosEraSummaries
   , OgmiosProtocolParameters
   , OgmiosSystemStart
+  , OgmiosTxEvaluationR
   , PoolParametersR
   , SubmitTxR
   ) as Ogmios
@@ -272,28 +274,28 @@ delegationsAndRewards rewardAccounts = do
             }
     )
 
--- evaluateTxOgmios
---   :: CborBytes -> AdditionalUtxoSet -> QueryM Provider.TxEvaluationR
--- evaluateTxOgmios cbor additionalUtxos = ogmiosErrorHandlerWithArg
---   evaluateTx
---   (cbor /\ additionalUtxos)
---   where
---   evaluateTx
---     :: CborBytes /\ AdditionalUtxoSet
---     -> Aff (Either OgmiosDecodeError Provider.TxEvaluationR)
---   evaluateTx (cbor /\ utxoqr) = do
---     handleAffjaxOgmiosResponse <$>
---       ( ogmiosPostRequest
---           $ Aeson.encodeAeson
---               { jsonrpc: "2.0"
--- , id: "evaluateTxOgmios"
---               , method: "evaluateTransaction"
---               , params:
---                   { transaction: { cbor: byteArrayToHex $ unwrap cbor }
---                   , additionalUtxo: utxoqr
---                   }
---               }
---       )
+evaluateTxOgmios
+  :: CborBytes -> Ogmios.AdditionalUtxoSet -> QueryM Provider.TxEvaluationR
+evaluateTxOgmios cbor additionalUtxos = unwrap <$> ogmiosErrorHandlerWithArg
+  evaluateTx
+  (cbor /\ additionalUtxos)
+  where
+  evaluateTx
+    :: CborBytes /\ Ogmios.AdditionalUtxoSet
+    -> QueryM (Either OgmiosDecodeError Ogmios.OgmiosTxEvaluationR)
+  evaluateTx (cbor_ /\ utxoqr) = do
+    handleAffjaxOgmiosResponse <$>
+      ( ogmiosPostRequest
+          $ Aeson.encodeAeson
+              { jsonrpc: "2.0"
+              , id: "evaluateTxOgmios"
+              , method: "evaluateTransaction"
+              , params:
+                  { transaction: { cbor: byteArrayToHex $ unwrap cbor_ }
+                  , additionalUtxo: utxoqr
+                  }
+              }
+      )
 
 instance DecodeOgmios TxEvaluationR where
   decodeOgmios = decodeErrorOrResult

@@ -16,7 +16,6 @@ import Ctl.Internal.Contract.LogParams (LogParams)
 import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend, CtlBackend)
 import Ctl.Internal.Helpers (logWithLevel)
 import Ctl.Internal.QueryM (QueryM)
-import Ctl.Internal.QueryM (evaluateTxOgmios) as QueryM
 import Ctl.Internal.QueryM.CurrentEpoch (getCurrentEpoch) as OgmiosHttp
 import Ctl.Internal.QueryM.EraSummaries (getEraSummaries) as OgmiosHttp
 import Ctl.Internal.QueryM.Kupo
@@ -30,7 +29,8 @@ import Ctl.Internal.QueryM.Kupo
   ) as Kupo
 import Ctl.Internal.QueryM.Ogmios (SubmitTxR(SubmitFail, SubmitTxSuccess))
 import Ctl.Internal.QueryM.OgmiosHttp
-  ( getChainTip
+  ( evaluateTxOgmios
+  , getChainTip
   , submitTxOgmios
   ) as OgmiosHttp
 import Ctl.Internal.QueryM.Pools
@@ -78,10 +78,10 @@ providerForCtlBackend runQueryM params backend =
                 "Computed TransactionHash is not equal to the one returned by Ogmios, please report as bug!"
             )
         SubmitFail err -> Left $ ClientOtherError $ show err
-  , evaluateTx: \tx additionalUtxos -> unwrap <$>
+  , evaluateTx: \tx additionalUtxos ->
       runQueryM' do
         let txBytes = encodeCbor tx
-        QueryM.evaluateTxOgmios txBytes (wrap additionalUtxos)
+        OgmiosHttp.evaluateTxOgmios txBytes (wrap additionalUtxos)
   , getEraSummaries: Right <$> runQueryM' OgmiosHttp.getEraSummaries
   , getPoolIds: Right <$> runQueryM' OgmiosHttp.getPoolIds
   , getPubKeyHashDelegationsAndRewards: \_ pubKeyHash ->

@@ -25,8 +25,6 @@ module Ctl.Internal.QueryM.Ogmios
   , MaybeMempoolTransaction(MaybeMempoolTransaction)
   , OgmiosTxEvaluationR(OgmiosTxEvaluationR)
   , aesonObject
-  , aesonArray
-  , evaluateTxCall
   , submitSuccessPartialResp
   , parseIpv6String
   , rationalToSubcoin
@@ -84,7 +82,6 @@ import Cardano.Types
 import Cardano.Types.AssetName (unAssetName)
 import Cardano.Types.BigNum (BigNum)
 import Cardano.Types.BigNum (fromBigInt, fromString) as BigNum
-import Cardano.Types.CborBytes (CborBytes)
 import Cardano.Types.Coin (Coin(Coin))
 import Cardano.Types.CostModel (CostModel(CostModel))
 import Cardano.Types.Ed25519KeyHash (Ed25519KeyHash)
@@ -131,12 +128,9 @@ import Control.Alternative (guard)
 import Ctl.Internal.Helpers (encodeMap, showWithParens)
 import Ctl.Internal.QueryM.JsonRpc2
   ( class DecodeOgmios
-  , JsonRpc2Call
-  , JsonRpc2Request
   , OgmiosError
   , decodeErrorOrResult
   , decodeResult
-  , mkCallType
   )
 import Ctl.Internal.Types.ProtocolParameters
   ( ProtocolParameters(ProtocolParameters)
@@ -179,36 +173,7 @@ import Untagged.TypeCheck (class HasRuntimeType)
 import Untagged.Union (type (|+|), toEither1)
 
 --------------------------------------------------------------------------------
--- Local Tx Submission Protocol
--- https://ogmios.dev/mini-protocols/local-tx-submission/
---------------------------------------------------------------------------------
 
--- | Evaluates the execution units of scripts present in a given transaction,
--- | without actually submitting the transaction.
-evaluateTxCall
-  :: JsonRpc2Call (CborBytes /\ AdditionalUtxoSet) OgmiosTxEvaluationR
-evaluateTxCall = mkOgmiosCallType
-  { method: "evaluateTransaction"
-  , params: \(cbor /\ utxoqr) ->
-      { transaction: { cbor: byteArrayToHex $ unwrap cbor }
-      , additionalUtxo: utxoqr
-      }
-  }
-
---------------------------------------------------------------------------------
--- Helpers
---------------------------------------------------------------------------------
-
-mkOgmiosCallType
-  :: forall (a :: Type) (i :: Type) (o :: Type)
-   . EncodeAeson (JsonRpc2Request a)
-  => DecodeOgmios o
-  => { method :: String, params :: i -> a }
-  -> JsonRpc2Call i o
-mkOgmiosCallType =
-  mkCallType { jsonrpc: "2.0" }
-
---------------------------------------------------------------------------------
 -- Local Tx Monitor Query Response & Parsing
 --------------------------------------------------------------------------------
 

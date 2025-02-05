@@ -6,7 +6,6 @@ module Ctl.Internal.QueryM
   ( QueryM
   , ParQueryM
   , QueryMT(QueryMT)
-  , evaluateTxOgmios
   , handleAffjaxResponse
   ) where
 
@@ -19,7 +18,6 @@ import Cardano.Provider.Error
   ( ClientError(ClientHttpError, ClientHttpResponseError, ClientDecodeJsonError)
   , ServiceError(ServiceOtherError)
   )
-import Cardano.Types.CborBytes (CborBytes)
 import Control.Alt (class Alt)
 import Control.Alternative (class Alternative)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow)
@@ -30,20 +28,11 @@ import Control.Monad.Rec.Class (class MonadRec)
 import Control.Parallel (class Parallel, parallel, sequential)
 import Control.Plus (class Plus)
 import Ctl.Internal.Helpers (logWithLevel)
-import Ctl.Internal.Logging (mkLogger)
-import Ctl.Internal.QueryM.Ogmios (AdditionalUtxoSet, OgmiosTxEvaluationR)
-import Ctl.Internal.QueryM.Ogmios as Ogmios
-import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
-  ( listeners
-  , mkRequestAff
-  , underlyingWebSocket
-  )
 import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (QueryEnv)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(Left, Right))
 import Data.Maybe (fromMaybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
-import Data.Tuple.Nested ((/\))
 import Effect.Aff (Aff, ParAff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect)
@@ -100,25 +89,6 @@ instance Parallel (QueryMT ParAff) (QueryMT Aff) where
   parallel = wrap <<< parallel <<< unwrap
   sequential :: QueryMT ParAff ~> QueryMT Aff
   sequential = wrap <<< sequential <<< unwrap
-
---------------------------------------------------------------------------------
--- Ogmios Local Tx Submission Protocol
---------------------------------------------------------------------------------
-
-evaluateTxOgmios
-  :: CborBytes -> AdditionalUtxoSet -> QueryM OgmiosTxEvaluationR
-evaluateTxOgmios cbor additionalUtxos = do
-  ws <- asks $ underlyingWebSocket <<< _.ogmiosWs <<< _.runtime
-  listeners' <- asks $ listeners <<< _.ogmiosWs <<< _.runtime
-  cfg <- asks _.config
-  liftAff $ mkRequestAff listeners' ws (mkLogger cfg.logLevel cfg.customLogger)
-    Ogmios.evaluateTxCall
-    _.evaluate
-    (cbor /\ additionalUtxos)
-
---------------------------------------------------------------------------------
--- Ogmios Local Tx Monitor Protocol
---------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
 -- Affjax
