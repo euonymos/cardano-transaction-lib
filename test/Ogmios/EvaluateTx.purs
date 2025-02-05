@@ -17,7 +17,7 @@ import Ctl.Internal.QueryM.JsonRpc2
   ( OgmiosDecodeError(ResultDecodingError)
   , decodeOgmios
   )
-import Ctl.Internal.QueryM.Ogmios (OgmiosTxEvaluationR)
+import Ctl.Internal.QueryM.Ogmios.Types (OgmiosTxEvaluationR)
 import Data.Either (Either(Left, Right))
 import Data.Map as Map
 import Data.Maybe (fromJust)

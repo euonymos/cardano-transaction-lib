@@ -15,7 +15,7 @@ module Ctl.Internal.Contract.ProviderBackend
 
 import Prelude
 
-import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool (OgmiosWebSocket)
+import Ctl.Internal.QueryM.Ogmios.Mempool (OgmiosWebSocket)
 import Ctl.Internal.ServerConfig (ServerConfig)
 import Data.Maybe (Maybe(Just, Nothing))
 import Data.Time.Duration (Seconds(Seconds))

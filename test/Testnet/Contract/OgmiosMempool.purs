@@ -5,6 +5,7 @@ module Test.Ctl.Testnet.Contract.OgmiosMempool
 import Prelude
 
 import Cardano.Types.BigNum as BigNum
+import Cardano.Types.PlutusScript (hash) as PlutusScript
 import Contract.Backend.Ogmios.Mempool
   ( acquireMempoolSnapshot
   , fetchMempoolTxs
@@ -12,12 +13,11 @@ import Contract.Backend.Ogmios.Mempool
   , mempoolSnapshotSizeAndCapacity
   , withMempoolSnapshot
   )
-import Contract.Scripts (validatorHash)
 import Contract.Test (ContractTest, InitialUTxOs, withKeyWallet, withWallets)
 import Contract.Test.Mote (TestPlanM)
 import Contract.Transaction (awaitTxConfirmed)
 import Ctl.Examples.PlutusV2.InlineDatum as InlineDatum
-import Ctl.Internal.QueryM.Ogmios
+import Ctl.Internal.QueryM.Ogmios.Types
   ( MempoolSizeAndCapacity(MempoolSizeAndCapacity)
   )
 import Data.Array (length)
@@ -46,7 +46,7 @@ suite = group "Ogmios mempool test" do
     withWallets distribution \alice -> do
       withKeyWallet alice do
         validator <- InlineDatum.checkDatumIsInlineScript
-        let vhash = validatorHash validator
+        let vhash = PlutusScript.hash validator
         txId <- InlineDatum.payToCheckDatumIsInline vhash
         mpTxs <- fetchMempoolTxs =<< acquireMempoolSnapshot
         length mpTxs `shouldEqual` 1
@@ -65,7 +65,7 @@ suite = group "Ogmios mempool test" do
       withWallets distribution \alice -> do
         withKeyWallet alice do
           validator <- InlineDatum.checkDatumIsInlineScript
-          let vhash = validatorHash validator
+          let vhash = PlutusScript.hash validator
           txId <- InlineDatum.payToCheckDatumIsInline vhash
           withMempoolSnapshot (flip mempoolSnapshotHasTx txId) >>= shouldEqual
             true
@@ -86,7 +86,7 @@ suite = group "Ogmios mempool test" do
     withWallets distribution \alice -> do
       withKeyWallet alice do
         validator <- InlineDatum.checkDatumIsInlineScript
-        let vhash = validatorHash validator
+        let vhash = PlutusScript.hash validator
         void $ InlineDatum.payToCheckDatumIsInline vhash
         MempoolSizeAndCapacity { numberOfTxs } <-
           withMempoolSnapshot (mempoolSnapshotSizeAndCapacity)

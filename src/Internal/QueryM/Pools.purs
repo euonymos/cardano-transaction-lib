@@ -17,8 +17,8 @@ import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.Helpers (liftM)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2 (pprintOgmiosDecodeError)
-import Ctl.Internal.QueryM.Ogmios (PoolParameters)
-import Ctl.Internal.QueryM.OgmiosHttp as OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios as OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios.Types (PoolParameters)
 import Ctl.Internal.Types.StakeValidatorHash (StakeValidatorHash)
 import Data.ByteArray (byteArrayToHex)
 import Data.Either (Either(Right, Left))

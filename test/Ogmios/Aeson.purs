@@ -15,13 +15,13 @@ import Ctl.Internal.QueryM.JsonRpc2
   , OgmiosDecodeError(ErrorResponse)
   , decodeOgmios
   )
-import Ctl.Internal.QueryM.Ogmios
+import Ctl.Internal.QueryM.Ogmios.Types
   ( HasTxR
   , OgmiosTxEvaluationR
   , SubmitTxR
   , aesonObject
   )
-import Ctl.Internal.QueryM.Ogmios as O
+import Ctl.Internal.QueryM.Ogmios.Types as O
 import Data.Array (catMaybes, groupAllBy, nubBy)
 import Data.Array.NonEmpty (NonEmptyArray, head, length, tail)
 import Data.Bifunctor (lmap)

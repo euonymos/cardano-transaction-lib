@@ -12,7 +12,7 @@ import Prelude
 
 import Aeson (decodeAeson, encodeAeson, parseJsonStringToAeson, stringifyAeson)
 import Ctl.Internal.Helpers (liftEither)
-import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (ClusterSetup)
+import Ctl.Internal.QueryM.Ogmios.Queries (ClusterSetup)
 import Ctl.Internal.Test.E2E.Feedback (BrowserEvent(Failure, Success))
 import Data.Array as Array
 import Data.Either (Either(Left), hush, note)

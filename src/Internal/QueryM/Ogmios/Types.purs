@@ -1,15 +1,33 @@
-module Ctl.Internal.QueryM.OgmiosHttp
-  ( getSystemStartTime
-  , aesonObject
-  , getChainTip
-  , currentEpoch
-  , submitTxOgmios
-  , poolParameters
+-- | Provides types and instances to create Ogmios requests and decode
+-- | its responses.
+module Ctl.Internal.QueryM.Ogmios.Types
+  ( ChainOrigin(ChainOrigin)
+  , ChainPoint
+  , ChainTipQR(CtChainOrigin, CtChainPoint)
+  , CurrentEpoch(CurrentEpoch)
+  , DelegationsAndRewardsR(DelegationsAndRewardsR)
+  , MempoolSizeAndCapacity(MempoolSizeAndCapacity)
+  , MempoolSnapshotAcquired
+  , MempoolTransaction(MempoolTransaction)
+  , OgmiosBlockHeaderHash(OgmiosBlockHeaderHash)
+  , OgmiosProtocolParameters(OgmiosProtocolParameters)
+  , PParamRational(PParamRational)
+  , PoolParameters
+  , PoolParametersR(PoolParametersR)
+  , ReleasedMempool(ReleasedMempool)
+  , AdditionalUtxoSet(AdditionalUtxoSet)
+  , OgmiosUtxoMap
+  , OgmiosEraSummaries(OgmiosEraSummaries)
+  , OgmiosSystemStart(OgmiosSystemStart)
+  , SubmitTxR(SubmitTxSuccess, SubmitFail)
   , StakePoolsQueryArgument(StakePoolsQueryArgument)
-  , delegationsAndRewards
-  , eraSummaries
-  , getProtocolParameters
-  , evaluateTxOgmios
+  , HasTxR(HasTxR)
+  , MaybeMempoolTransaction(MaybeMempoolTransaction)
+  , OgmiosTxEvaluationR(OgmiosTxEvaluationR)
+  , aesonObject
+  , submitSuccessPartialResp
+  , parseIpv6String
+  , rationalToSubcoin
   ) where
 
 import Prelude
@@ -18,46 +36,55 @@ import Aeson
   ( class DecodeAeson
   , class EncodeAeson
   , Aeson
-  , JsonDecodeError(TypeMismatch, MissingValue, AtKey)
+  , JsonDecodeError(AtKey, TypeMismatch, UnexpectedValue, MissingValue)
   , caseAesonArray
+  , caseAesonNull
   , caseAesonObject
   , caseAesonString
   , decodeAeson
   , encodeAeson
   , fromArray
+  , fromString
   , getField
   , isNull
-  , parseJsonStringToAeson
   , stringifyAeson
+  , (.:)
   , (.:?)
   )
-import Aeson as Aeson
-import Affjax (Error, Response, defaultRequest) as Affjax
-import Affjax.RequestBody as Affjax.RequestBody
-import Affjax.RequestHeader as Affjax.RequestHeader
-import Affjax.ResponseFormat (string) as Affjax.ResponseFormat
-import Affjax.StatusCode (StatusCode(StatusCode))
-import Affjax.StatusCode as Affjax.StatusCode
-import Cardano.AsCbor (encodeCbor)
-import Cardano.Provider.Error
-  ( ClientError(ClientHttpError, ClientHttpResponseError)
-  , ServiceError(ServiceOtherError)
+import Cardano.AsCbor (decodeCbor, encodeCbor)
+import Cardano.Provider.TxEvaluation
+  ( ExecutionUnits
+  , OgmiosTxId
+  , OgmiosTxOut
+  , OgmiosTxOutRef
+  , RedeemerPointer
+  , ScriptFailure
+      ( InternalLedgerTypeConversionError
+      , NoCostModelForLanguage
+      , UnknownInputReferencedByRedeemer
+      , MissingRequiredDatums
+      , ExtraRedeemers
+      , NonScriptInputReferencedByRedeemer
+      , ValidatorFailed
+      , MissingRequiredScripts
+      )
+  , TxEvaluationFailure(UnparsedError, AdditionalUtxoOverlap, ScriptFailures)
+  , TxEvaluationR(TxEvaluationR)
+  , TxEvaluationResult(TxEvaluationResult)
   )
-import Cardano.Provider.TxEvaluation as Provider
-import Cardano.Serialization.Lib (fromBytes)
+import Cardano.Serialization.Lib (fromBytes, ipv4_new)
 import Cardano.Types
-  ( Bech32String
-  , BigNum(BigNum)
+  ( BigNum(BigNum)
   , Language(PlutusV3, PlutusV2, PlutusV1)
   , RedeemerTag
+  , VRFKeyHash(VRFKeyHash)
   )
 import Cardano.Types.AssetName (unAssetName)
 import Cardano.Types.BigNum (BigNum)
-import Cardano.Types.BigNum (fromBigInt) as BigNum
-import Cardano.Types.CborBytes (CborBytes)
-import Cardano.Types.Chain as Chain
+import Cardano.Types.BigNum (fromBigInt, fromString) as BigNum
 import Cardano.Types.Coin (Coin(Coin))
 import Cardano.Types.CostModel (CostModel(CostModel))
+import Cardano.Types.Ed25519KeyHash (Ed25519KeyHash)
 import Cardano.Types.EraSummaries
   ( EraSummaries(EraSummaries)
   , EraSummary(EraSummary)
@@ -67,6 +94,8 @@ import Cardano.Types.EraSummaries
 import Cardano.Types.ExUnitPrices (ExUnitPrices(ExUnitPrices))
 import Cardano.Types.ExUnits (ExUnits(ExUnits))
 import Cardano.Types.Int as Cardano
+import Cardano.Types.Ipv4 (Ipv4(Ipv4))
+import Cardano.Types.Ipv6 (Ipv6)
 import Cardano.Types.NativeScript
   ( NativeScript
       ( ScriptPubkey
@@ -78,43 +107,31 @@ import Cardano.Types.NativeScript
       )
   )
 import Cardano.Types.PlutusScript (PlutusScript(PlutusScript))
+import Cardano.Types.PoolMetadata (PoolMetadata(PoolMetadata))
 import Cardano.Types.PoolPubKeyHash (PoolPubKeyHash)
 import Cardano.Types.RedeemerTag
   ( RedeemerTag(Spend, Mint, Cert, Reward, Vote, Propose)
   ) as RedeemerTag
-import Cardano.Types.ScriptHash (ScriptHash)
+import Cardano.Types.Relay
+  ( Relay(SingleHostAddr, SingleHostName, MultiHostName)
+  )
+import Cardano.Types.RewardAddress (RewardAddress)
+import Cardano.Types.RewardAddress as RewardAddress
 import Cardano.Types.ScriptRef (ScriptRef(NativeScriptRef, PlutusScriptRef))
 import Cardano.Types.Slot (Slot(Slot))
 import Cardano.Types.TransactionHash (TransactionHash)
+import Cardano.Types.URL (URL(URL))
 import Cardano.Types.UnitInterval (UnitInterval(UnitInterval))
 import Cardano.Types.Value (Value, getMultiAsset, valueToCoin)
-import Contract.Log (logTrace')
-import Control.Monad.Error.Class (class MonadThrow, throwError)
-import Control.Monad.Reader.Class (asks)
-import Ctl.Internal.Affjax (request) as Affjax
+import Control.Alt ((<|>))
+import Control.Alternative (guard)
 import Ctl.Internal.Helpers (encodeMap, showWithParens)
-import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2
   ( class DecodeOgmios
-  , OgmiosDecodeError(ClientErrorResponse, ResultDecodingError)
   , OgmiosError
   , decodeErrorOrResult
-  , decodeOgmios
   , decodeResult
-  , pprintOgmiosDecodeError
   )
-import Ctl.Internal.QueryM.Ogmios
-  ( AdditionalUtxoSet
-  , CurrentEpoch
-  , DelegationsAndRewardsR(DelegationsAndRewardsR)
-  , OgmiosEraSummaries
-  , OgmiosProtocolParameters
-  , OgmiosSystemStart
-  , OgmiosTxEvaluationR
-  , PoolParametersR
-  , SubmitTxR
-  ) as Ogmios
-import Ctl.Internal.ServerConfig (ServerConfig, mkHttpUrl)
 import Ctl.Internal.Types.ProtocolParameters
   ( ProtocolParameters(ProtocolParameters)
   )
@@ -125,15 +142,15 @@ import Ctl.Internal.Types.SystemStart
   , sysStartFromOgmiosTimestamp
   , sysStartToOgmiosTimestamp
   )
+import Data.Argonaut.Encode.Encoders as Argonaut
 import Data.Array (catMaybes)
-import Data.Array (fromFoldable) as Array
+import Data.Array (fromFoldable, length, replicate) as Array
 import Data.Bifunctor (lmap)
-import Data.ByteArray (byteArrayToHex, hexToByteArray)
+import Data.ByteArray (byteArrayFromIntArray, byteArrayToHex, hexToByteArray)
 import Data.Either (Either(Left, Right), either, note)
-import Data.Foldable (foldl)
+import Data.Foldable (fold, foldl)
 import Data.Generic.Rep (class Generic)
-import Data.HTTP.Method (Method(POST))
-import Data.Lens (_Right, to, (^?))
+import Data.Int (fromString) as Int
 import Data.List (List)
 import Data.List as List
 import Data.Map (Map)
@@ -141,173 +158,22 @@ import Data.Map as Map
 import Data.Maybe (Maybe(Nothing, Just), fromMaybe, maybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Show.Generic (genericShow)
-import Data.String (Pattern(Pattern))
+import Data.String (Pattern(Pattern), Replacement(Replacement))
+import Data.String (replaceAll) as String
 import Data.String.Common (split) as String
-import Data.Time.Duration (Milliseconds(Milliseconds))
+import Data.String.Utils as StringUtils
 import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(Tuple))
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UInt (UInt)
-import Effect.Aff (Aff, delay)
-import Effect.Aff.Class (class MonadAff, liftAff)
-import Effect.Exception (Error, error)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import JS.BigInt as BigInt
 import Untagged.TypeCheck (class HasRuntimeType)
 import Untagged.Union (type (|+|), toEither1)
 
-eraSummaries :: QueryM (Either OgmiosDecodeError Ogmios.OgmiosEraSummaries)
-eraSummaries = do
-  handleAffjaxOgmiosResponse <$>
-    ( ogmiosPostRequest
-        $ Aeson.encodeAeson
-            { jsonrpc: "2.0"
-            , id: "eraSummaries"
-            , method: "queryLedgerState/eraSummaries"
-            }
-    )
-
-getSystemStartTime :: QueryM (Either OgmiosDecodeError Ogmios.OgmiosSystemStart)
-getSystemStartTime = do
-  let
-    body = Aeson.encodeAeson
-      { jsonrpc: "2.0"
-      , id: "getSystemStartTime"
-      , method: "queryNetwork/startTime"
-      }
-  handleAffjaxOgmiosResponse <$> ogmiosPostRequest body
-
-getProtocolParameters
-  :: QueryM (Either OgmiosDecodeError Ogmios.OgmiosProtocolParameters)
-getProtocolParameters = do
-  let
-    body = Aeson.encodeAeson
-      { jsonrpc: "2.0"
-      , id: "getProtocolParameters"
-      , method: "queryLedgerState/protocolParameters"
-      }
-  handleAffjaxOgmiosResponse <$> ogmiosPostRequest body
-
-getChainTip :: QueryM Chain.Tip
-getChainTip = do
-  ogmiosChainTipToTip <$> ogmiosErrorHandler chainTip
-  where
-  ogmiosChainTipToTip :: ChainTipQR -> Chain.Tip
-  ogmiosChainTipToTip = case _ of
-    CtChainOrigin _ -> Chain.TipAtGenesis
-    CtChainPoint { slot, id } -> Chain.Tip $ wrap
-      { slot, blockHeaderHash: wrap $ unwrap id }
-
-  chainTip :: QueryM (Either OgmiosDecodeError ChainTipQR)
-  chainTip = do
-    handleAffjaxOgmiosResponse <$>
-      ( ogmiosPostRequest
-          $ Aeson.encodeAeson
-              { jsonrpc: "2.0"
-              , id: "getChainTip"
-              , method: "queryNetwork/tip"
-              }
-      )
-
-currentEpoch :: QueryM (Either OgmiosDecodeError Ogmios.CurrentEpoch)
-currentEpoch = do
-  handleAffjaxOgmiosResponse <$>
-    ( ogmiosPostRequest
-        $ Aeson.encodeAeson
-            { jsonrpc: "2.0"
-            , id: "currentEpoch"
-            , method: "queryLedgerState/epoch"
-            }
-    )
-
-submitTxOgmios :: TransactionHash -> CborBytes -> QueryM Ogmios.SubmitTxR
-submitTxOgmios txHash tx = ogmiosErrorHandlerWithArg submitTx
-  (txHash /\ tx)
-  where
-  submitTx
-    :: TransactionHash /\ CborBytes
-    -> QueryM (Either OgmiosDecodeError Ogmios.SubmitTxR)
-  submitTx (_ /\ cbor) = do
-    handleAffjaxOgmiosResponse <$>
-      ( ogmiosPostRequest
-          $ Aeson.encodeAeson
-              { jsonrpc: "2.0"
-              , id: "submitTxOgmios"
-              , method: "submitTransaction"
-              , params:
-                  { transaction:
-                      { cbor: byteArrayToHex (unwrap cbor)
-                      }
-                  }
-              }
-      )
-
-poolParameters
-  :: StakePoolsQueryArgument
-  -> QueryM (Either OgmiosDecodeError Ogmios.PoolParametersR)
-poolParameters stakePools = do
-  handleAffjaxOgmiosResponse <$>
-    ( ogmiosPostRequest
-        $ Aeson.encodeAeson
-            { jsonrpc: "2.0"
-            , id: "poolParameters"
-            , method: "queryLedgerState/stakePools"
-            , params: stakePools
-            }
-    )
-
-delegationsAndRewards
-  :: Array String -- ^ A list of reward account bech32 strings
-  -> QueryM (Either OgmiosDecodeError Ogmios.DelegationsAndRewardsR)
-delegationsAndRewards rewardAccounts = do
-  handleAffjaxOgmiosResponse <$>
-    ( ogmiosPostRequest
-        $ Aeson.encodeAeson
-            { jsonrpc: "2.0"
-            , id: "delegationsAndRewards"
-            , method: "queryLedgerState/rewardAccountSummaries"
-            , params:
-                { query:
-                    { delegationsAndRewards: rewardAccounts }
-                }
-            }
-    )
-
-evaluateTxOgmios
-  :: CborBytes -> Ogmios.AdditionalUtxoSet -> QueryM Provider.TxEvaluationR
-evaluateTxOgmios cbor additionalUtxos = unwrap <$> ogmiosErrorHandlerWithArg
-  evaluateTx
-  (cbor /\ additionalUtxos)
-  where
-  evaluateTx
-    :: CborBytes /\ Ogmios.AdditionalUtxoSet
-    -> QueryM (Either OgmiosDecodeError Ogmios.OgmiosTxEvaluationR)
-  evaluateTx (cbor_ /\ utxoqr) = do
-    handleAffjaxOgmiosResponse <$>
-      ( ogmiosPostRequest
-          $ Aeson.encodeAeson
-              { jsonrpc: "2.0"
-              , id: "evaluateTxOgmios"
-              , method: "evaluateTransaction"
-              , params:
-                  { transaction: { cbor: byteArrayToHex $ unwrap cbor_ }
-                  , additionalUtxo: utxoqr
-                  }
-              }
-      )
-
-instance DecodeOgmios TxEvaluationR where
-  decodeOgmios = decodeErrorOrResult
-    { parseError: map (wrap <<< Left) <<< decodeAeson }
-    { parseResult: map (wrap <<< Right) <<< decodeAeson }
-
--- Response parsing
 --------------------------------------------------------------------------------
 
-type OgmiosAddress = Bech32String
-
---------------------------------------------------------------------------------
 -- Local Tx Monitor Query Response & Parsing
 --------------------------------------------------------------------------------
 
@@ -318,7 +184,99 @@ derive instance Newtype HasTxR _
 instance DecodeOgmios HasTxR where
   decodeOgmios = decodeResult (map HasTxR <<< decodeAeson)
 
+newtype MempoolSnapshotAcquired = AwaitAcquired Slot
+
+instance Show MempoolSnapshotAcquired where
+  show (AwaitAcquired slot) = "(AwaitAcquired " <> show slot <> ")"
+
+instance DecodeAeson MempoolSnapshotAcquired where
+  decodeAeson =
+    -- todo: ignoring "acquired": "mempool"
+    map AwaitAcquired <<< aesonObject (flip getField "slot")
+
+instance DecodeOgmios MempoolSnapshotAcquired where
+  decodeOgmios = decodeResult decodeAeson
+
+-- | The acquired snapshot’s size (in bytes), number of transactions, and capacity
+-- | (in bytes).
+newtype MempoolSizeAndCapacity = MempoolSizeAndCapacity
+  { capacity :: Prim.Int
+  , currentSize :: Prim.Int
+  , numberOfTxs :: Prim.Int
+  }
+
+derive instance Generic MempoolSizeAndCapacity _
+derive instance Newtype MempoolSizeAndCapacity _
+
+instance Show MempoolSizeAndCapacity where
+  show = genericShow
+
+instance DecodeAeson MempoolSizeAndCapacity where
+  decodeAeson = aesonObject \o -> do
+    capacity <- getField o "maxCapacity" >>= flip getField "bytes"
+    currentSize <- getField o "currentSize" >>= flip getField "bytes"
+    numberOfTxs <- getField o "transactions" >>= flip getField "count"
+    pure $ wrap { capacity, currentSize, numberOfTxs }
+
+instance DecodeOgmios MempoolSizeAndCapacity where
+  decodeOgmios = decodeResult decodeAeson
+
+newtype MempoolTransaction = MempoolTransaction
+  { id :: OgmiosTxId
+  , raw :: String -- hex encoded transaction cbor
+  }
+
+derive instance Generic MempoolTransaction _
+derive instance Newtype MempoolTransaction _
+
+newtype MaybeMempoolTransaction = MaybeMempoolTransaction
+  (Maybe MempoolTransaction)
+
+instance DecodeAeson MaybeMempoolTransaction where
+  decodeAeson aeson = do
+    { transaction: tx } :: { transaction :: Aeson } <- decodeAeson aeson
+    res <-
+      ( do
+          tx' :: { id :: String, cbor :: String } <- decodeAeson tx
+          pure $ Just $ MempoolTransaction { id: tx'.id, raw: tx'.cbor }
+      ) <|>
+        ( do
+            aesonNull tx
+            pure Nothing
+        )
+    pure $ MaybeMempoolTransaction $ res
+
+derive instance Newtype MaybeMempoolTransaction _
+
+instance DecodeOgmios MaybeMempoolTransaction where
+  decodeOgmios = decodeResult decodeAeson
+
+data ReleasedMempool = ReleasedMempool
+
+derive instance Generic ReleasedMempool _
+
+instance Show ReleasedMempool where
+  show = genericShow
+
+instance DecodeAeson ReleasedMempool where
+  decodeAeson = aesonObject \o -> do
+    released <- o .: "released"
+    flip aesonString released $ \s ->
+      if s == "mempool" then
+        pure $ ReleasedMempool
+      else
+        Left (UnexpectedValue $ Argonaut.encodeString s)
+
+instance DecodeOgmios ReleasedMempool where
+  decodeOgmios = decodeResult decodeAeson
+
 ---------------- TX SUBMISSION QUERY RESPONSE & PARSING
+
+submitSuccessPartialResp
+  :: TransactionHash
+  -> { result :: { transaction :: { id :: TransactionHash } } }
+submitSuccessPartialResp txHash =
+  { "result": { "transaction": { "id": txHash } } }
 
 data SubmitTxR
   = SubmitTxSuccess TransactionHash
@@ -435,8 +393,8 @@ instance DecodeAeson OgmiosEraSummaries where
       pure $ wrap { epochLength, slotLength, safeZone }
 
 instance EncodeAeson OgmiosEraSummaries where
-  encodeAeson (OgmiosEraSummaries (EraSummaries es)) =
-    fromArray $ map encodeEraSummary es
+  encodeAeson (OgmiosEraSummaries (EraSummaries eraSummaries)) =
+    fromArray $ map encodeEraSummary eraSummaries
     where
     encodeEraSummaryTime :: EraSummaryTime -> Aeson
     encodeEraSummaryTime (EraSummaryTime { time, slot, epoch }) =
@@ -502,35 +460,189 @@ instance EncodeAeson StakePoolsQueryArgument where
       )
       (unwrap a)
 
+---------------- POOL PARAMETERS QUERY RESPONSE & PARSING
+
+type PoolParameters =
+  { vrfKeyhash :: VRFKeyHash
+  -- needed to prove that the pool won the lottery
+  , pledge :: BigNum
+  , cost :: BigNum -- >= pparams.minPoolCost
+  , margin :: UnitInterval -- proportion that goes to the reward account
+  , rewardAccount :: RewardAddress
+  , poolOwners :: Array Ed25519KeyHash
+  -- payment key hashes that contribute to pledge amount
+  , relays :: Array Relay
+  , poolMetadata :: Maybe PoolMetadata
+  }
+
+newtype PoolParametersR = PoolParametersR (Map PoolPubKeyHash PoolParameters)
+
+derive instance Newtype PoolParametersR _
+derive instance Generic PoolParametersR _
+
+instance Show PoolParametersR where
+  show = genericShow
+
+instance DecodeAeson PoolParametersR where
+  decodeAeson aeson = do
+    obj :: Object (Object Aeson) <- decodeAeson aeson
+    kvs <- for (Object.toUnfoldable obj :: Array _) \(Tuple k objParams) -> do
+      poolPkh <- decodeAeson $ fromString k
+      poolParams <- decodePoolParameters objParams
+      pure $ poolPkh /\ poolParams
+    pure $ PoolParametersR $ Map.fromFoldable kvs
+
+instance DecodeOgmios PoolParametersR where
+  decodeOgmios = decodeResult decodeAeson
+
+decodePoolParameters :: Object Aeson -> Either JsonDecodeError PoolParameters
+decodePoolParameters objParams = do
+  vrfKeyhash <- decodeVRFKeyHash =<< objParams .: "vrfVerificationKeyHash"
+  pledge <- objParams .: "pledge" >>= aesonObject \obj ->
+    obj .: "ada" >>= flip getField "lovelace"
+  cost <- objParams .: "cost" >>= aesonObject \obj ->
+    obj .: "ada" >>= flip getField "lovelace"
+  margin <- decodeUnitInterval =<< objParams .: "margin"
+  rewardAccount <- objParams .: "rewardAccount" >>=
+    RewardAddress.fromBech32 >>> note (TypeMismatch "RewardAddress")
+  poolOwners <- objParams .: "owners"
+  relayArr <- objParams .: "relays"
+  relays <- for relayArr decodeRelay
+  poolMetadata <- objParams .:? "metadata" >>= traverse decodePoolMetadata
+  pure
+    { vrfKeyhash
+    , pledge
+    , cost
+    , margin
+    , rewardAccount
+    , poolOwners
+    , relays
+    , poolMetadata
+    }
+
+decodeVRFKeyHash :: Aeson -> Either JsonDecodeError VRFKeyHash
+decodeVRFKeyHash = aesonString $ \vrfKeyhashHex -> do
+  vrfKeyhashBytes <- note (TypeMismatch "VRFKeyHash") $ hexToByteArray
+    vrfKeyhashHex
+  note (TypeMismatch "VRFKeyHash") $ VRFKeyHash <$> fromBytes vrfKeyhashBytes
+
+decodeUnitInterval :: Aeson -> Either JsonDecodeError UnitInterval
+decodeUnitInterval aeson = do
+  str <- decodeAeson aeson
+  case String.split (Pattern "/") str of
+    [ num, den ] -> do
+      numerator <- note (TypeMismatch "BigNum") $ BigNum.fromString num
+      denominator <- note (TypeMismatch "BigNum") $ BigNum.fromString den
+      pure $ UnitInterval
+        { numerator
+        , denominator
+        }
+    _ -> Left $ TypeMismatch "UnitInterval"
+
+decodeIpv4 :: Aeson -> Either JsonDecodeError Ipv4
+decodeIpv4 aeson = do
+  str <- decodeAeson aeson
+  case String.split (Pattern ".") str of
+    bs@[ _, _, _, _ ] -> do
+      ints <- for bs $
+        note (TypeMismatch "Ipv4") <<< Int.fromString
+      Ipv4 <<< ipv4_new <$> note (TypeMismatch "Ipv4")
+        (byteArrayFromIntArray ints)
+    _ -> Left $ TypeMismatch "Ipv4"
+
+decodeIpv6 :: Aeson -> Either JsonDecodeError Ipv6
+decodeIpv6 aeson = do
+  decodeAeson aeson >>= parseIpv6String >>> note (TypeMismatch "Ipv6")
+
+parseIpv6String :: String -> Maybe Ipv6
+parseIpv6String str = do
+  let
+    parts = String.split (Pattern ":") str
+    partsFixed =
+      if Array.length parts < 8 then
+        -- Normalize double colon
+        -- see https://ipcisco.com/lesson/ipv6-address/
+        do
+          part <- parts
+          if part == "" then
+            Array.replicate (8 - Array.length parts + 1) ""
+          else
+            pure part
+      else
+        parts
+  guard (Array.length partsFixed == 8)
+  let
+    padded = String.replaceAll (Pattern " ") (Replacement "0") $ fold $
+      partsFixed
+        <#> StringUtils.padStart 4
+  decodeCbor <<< wrap =<< hexToByteArray padded
+
+decodeRelay :: Aeson -> Either JsonDecodeError Relay
+decodeRelay aeson = do
+  obj <- decodeAeson aeson
+  let
+    decodeSingleHostAddr = do
+      port <- obj .:? "port"
+      ipv4 <- obj .:? "ipv4" >>= traverse decodeIpv4
+      ipv6 <- obj .:? "ipv6" >>= traverse decodeIpv6
+      pure $ SingleHostAddr { port, ipv4, ipv6 }
+    decodeSingleHostName = do
+      port <- obj .: "port"
+      dnsName <- obj .: "hostname"
+      pure $ SingleHostName { port, dnsName }
+    decodeMultiHostName = do
+      dnsName <- obj .: "hostname"
+      pure $ MultiHostName { dnsName }
+  decodeSingleHostName <|> decodeSingleHostAddr <|> decodeMultiHostName
+
+decodePoolMetadata :: Aeson -> Either JsonDecodeError PoolMetadata
+decodePoolMetadata aeson = do
+  obj <- decodeAeson aeson
+  hash <- obj .: "hash" >>=
+    (hexToByteArray >>> map wrap >=> decodeCbor) >>>
+      note (TypeMismatch "PoolMetadataHash")
+  url <- obj .: "url" <#> URL
+  pure $ PoolMetadata { hash, url }
+
 ---------------- TX EVALUATION QUERY RESPONSE & PARSING
-
-type RedeemerPointer = { redeemerTag :: RedeemerTag, redeemerIndex :: UInt }
-
-type ExecutionUnits = { memory :: BigNum, steps :: BigNum }
 
 type OgmiosRedeemerPtr = { index :: UInt, purpose :: String }
 
-newtype TxEvaluationR = TxEvaluationR
-  (Either TxEvaluationFailure TxEvaluationResult)
+newtype OgmiosTxEvaluationR = OgmiosTxEvaluationR TxEvaluationR
 
-derive instance Newtype TxEvaluationR _
-derive instance Generic TxEvaluationR _
+derive instance Newtype OgmiosTxEvaluationR _
+derive instance Generic OgmiosTxEvaluationR _
 
-instance Show TxEvaluationR where
+instance Show OgmiosTxEvaluationR where
   show = genericShow
 
-newtype TxEvaluationResult = TxEvaluationResult
-  (Map RedeemerPointer ExecutionUnits)
+instance DecodeOgmios OgmiosTxEvaluationR where
+  decodeOgmios =
+    decodeErrorOrResult
+      { parseError:
+          map
+            ( \(f :: OgmiosTxEvaluationFailure) ->
+                f # unwrap # Left # wrap # wrap
+            ) <<< decodeAeson
+      }
+      { parseResult:
+          map
+            ( \(r :: OgmiosTxEvaluationResult) -> r # unwrap # Right # wrap #
+                wrap
+            ) <<< decodeAeson
+      }
 
-derive instance Newtype TxEvaluationResult _
-derive instance Generic TxEvaluationResult _
+newtype OgmiosTxEvaluationResult = OgmiosTxEvaluationResult TxEvaluationResult
 
-instance Show TxEvaluationResult where
+derive instance Newtype OgmiosTxEvaluationResult _
+derive instance Generic OgmiosTxEvaluationResult _
+
+instance Show OgmiosTxEvaluationResult where
   show = genericShow
 
-instance DecodeAeson TxEvaluationResult where
+instance DecodeAeson OgmiosTxEvaluationResult where
   decodeAeson = aesonArray $ \array -> do
-    TxEvaluationResult <<< Map.fromFoldable <$>
+    OgmiosTxEvaluationResult <<< TxEvaluationResult <<< Map.fromFoldable <$>
       traverse decodeRdmrPtrExUnitsItem array
 
     where
@@ -566,53 +678,25 @@ redeemerTagFromString = case _ of
   "propose" -> Just RedeemerTag.Propose
   _ -> Nothing
 
-type OgmiosDatum = String
-type OgmiosScript = String
-type OgmiosTxId = String
-type OgmiosTxIn = { txId :: OgmiosTxId, index :: Prim.Int }
+newtype OgmiosScriptFailure = OgmiosScriptFailure ScriptFailure
 
--- | Reason a script failed.
---
--- The type definition is a least common denominator between Ogmios v6 format used by ogmios backend
--- and ogmios v5.6 format used by blockfrost backend
-data ScriptFailure
-  = ExtraRedeemers (Array RedeemerPointer)
-  | MissingRequiredDatums
-      { missing :: (Array OgmiosDatum)
-      , provided :: Maybe (Array OgmiosDatum)
-      }
-  | MissingRequiredScripts
-      { missing :: Array RedeemerPointer
-      , resolved :: Maybe (Map RedeemerPointer ScriptHash)
-      }
-  | ValidatorFailed { error :: String, traces :: Array String }
-  | UnknownInputReferencedByRedeemer (Array OgmiosTxIn)
-  | NonScriptInputReferencedByRedeemer OgmiosTxIn
-  | NoCostModelForLanguage (Array String)
-  | InternalLedgerTypeConversionError String
-  | IllFormedExecutionBudget (Maybe ExecutionUnits)
+derive instance Generic OgmiosScriptFailure _
+derive instance Newtype OgmiosScriptFailure _
 
-derive instance Generic ScriptFailure _
-
-instance Show ScriptFailure where
+instance Show OgmiosScriptFailure where
   show = genericShow
 
--- The following cases are fine to fall through into unparsed error:
--- IncompatibleEra
--- NotEnoughSynced
--- CannotCreateEvaluationContext
-data TxEvaluationFailure
-  = UnparsedError String
-  | AdditionalUtxoOverlap (Array OgmiosTxOutRef)
-  | ScriptFailures (Map RedeemerPointer (Array ScriptFailure))
+newtype OgmiosTxEvaluationFailure =
+  OgmiosTxEvaluationFailure TxEvaluationFailure
 
-derive instance Generic TxEvaluationFailure _
+derive instance Generic OgmiosTxEvaluationFailure _
+derive instance Newtype OgmiosTxEvaluationFailure _
 
-instance Show TxEvaluationFailure where
+instance Show OgmiosTxEvaluationFailure where
   show = genericShow
 
-instance DecodeAeson ScriptFailure where
-  decodeAeson aeson = do
+instance DecodeAeson OgmiosScriptFailure where
+  decodeAeson aeson = OgmiosScriptFailure <$> do
     err :: OgmiosError <- decodeAeson aeson
     let error = unwrap err
     errorData <- maybe (Left (AtKey "data" MissingValue)) pure error.data
@@ -661,8 +745,8 @@ instance DecodeAeson ScriptFailure where
       _ -> Left $ TypeMismatch $ "Unknown ogmios error code: " <> show
         error.code
 
-instance DecodeAeson TxEvaluationFailure where
-  decodeAeson aeson = do
+instance DecodeAeson OgmiosTxEvaluationFailure where
+  decodeAeson aeson = OgmiosTxEvaluationFailure <$> do
     error :: OgmiosError <- decodeAeson aeson
     let code = (unwrap error).code
     errorData <- maybe (Left (AtKey "data" MissingValue)) pure
@@ -689,9 +773,9 @@ instance DecodeAeson TxEvaluationFailure where
 
     where
     parseElem elem = do
-      res :: { validator :: OgmiosRedeemerPtr, error :: ScriptFailure } <-
+      res :: { validator :: OgmiosRedeemerPtr, error :: OgmiosScriptFailure } <-
         decodeAeson elem
-      (_ /\ res.error) <$> decodeRedeemerPointer res.validator
+      (_ /\ unwrap res.error) <$> decodeRedeemerPointer res.validator
 
     collectIntoMap :: forall k v. Ord k => Array (k /\ v) -> Map k (List v)
     collectIntoMap = foldl
@@ -918,20 +1002,6 @@ derive instance Newtype AdditionalUtxoSet _
 
 derive newtype instance Show AdditionalUtxoSet
 
--- Ogmios tx input
-type OgmiosTxOutRef =
-  { txId :: String
-  , index :: UInt
-  }
-
-type OgmiosTxOut =
-  { address :: OgmiosAddress
-  , value :: Value
-  , datumHash :: Maybe String
-  , datum :: Maybe String
-  , script :: Maybe ScriptRef
-  }
-
 type OgmiosUtxoMap = Map OgmiosTxOutRef OgmiosTxOut
 
 instance EncodeAeson AdditionalUtxoSet where
@@ -1024,90 +1094,17 @@ aesonArray
   -> Either JsonDecodeError a
 aesonArray = caseAesonArray (Left (TypeMismatch "Expected Array"))
 
---------------------------------------------------------------------------------
--- Helpers
---------------------------------------------------------------------------------
-
-ogmiosPostRequest
-  :: Aeson -- ^ JSON-RPC request body
-  -> QueryM (Either Affjax.Error (Affjax.Response String))
-ogmiosPostRequest body = do
-  config <- asks (_.ogmiosConfig <<< _.config)
-  logTrace' $ "sending ogmios HTTP request: " <> show body
-  liftAff $ ogmiosPostRequestAff config body
-
-ogmiosPostRequestAff
-  :: ServerConfig
+-- Helper that decodes a string
+aesonString
+  :: forall (a :: Type)
+   . (String -> Either JsonDecodeError a)
   -> Aeson
-  -> Aff (Either Affjax.Error (Affjax.Response String))
-ogmiosPostRequestAff = ogmiosPostRequestRetryAff (Milliseconds 1000.0)
+  -> Either JsonDecodeError a
+aesonString = caseAesonString (Left (TypeMismatch "Expected String"))
 
-ogmiosPostRequestRetryAff
-  :: Milliseconds
-  -> ServerConfig
-  -> Aeson
-  -> Aff (Either Affjax.Error (Affjax.Response String))
-ogmiosPostRequestRetryAff delayMs config body = do
-  let
-    req = Affjax.defaultRequest
-      { method = Left POST
-      , url = mkHttpUrl config
-      , headers =
-          [ Affjax.RequestHeader.RequestHeader "Content-Type"
-              "application/json"
-          ]
-      , content = Just $ Affjax.RequestBody.String $ stringifyAeson body
-      , responseFormat = Affjax.ResponseFormat.string
-      }
-
-  result <- Affjax.request req
-
-  if result ^? _Right <<< to _.status == Just (StatusCode 503) then
-    delay delayMs *>
-      ogmiosPostRequestRetryAff (Milliseconds (unwrap delayMs * 2.0)) config
-        body
-
-  else pure result
-
-handleAffjaxOgmiosResponse
-  :: forall (result :: Type)
-   . DecodeOgmios result
-  => Either Affjax.Error (Affjax.Response String)
-  -> Either OgmiosDecodeError result
-handleAffjaxOgmiosResponse (Left affjaxError) =
-  Left (ClientErrorResponse $ ClientHttpError affjaxError)
-handleAffjaxOgmiosResponse
-  (Right { status: Affjax.StatusCode.StatusCode statusCode, body })
-  | statusCode < 200 || statusCode > 299 =
-      Left $ ClientErrorResponse $ ClientHttpResponseError (wrap statusCode) $
-        ServiceOtherError body
-  | otherwise = do
-      aeson <- lmap ResultDecodingError
-        $ parseJsonStringToAeson body
-      decodeOgmios aeson
-
-ogmiosErrorHandler
-  :: forall a m
-   . MonadAff m
-  => MonadThrow Error m
-  => m (Either OgmiosDecodeError a)
-  -> m a
-ogmiosErrorHandler fun = do
-  resp <- fun
-  case resp of
-    Left err -> throwError $ error $ pprintOgmiosDecodeError err
-    Right val -> pure val
-
-ogmiosErrorHandlerWithArg
-  :: forall a m b
-   . MonadAff m
-  => MonadThrow Error m
-  => (a -> m (Either OgmiosDecodeError b))
-  -> a
-  -> m b
-ogmiosErrorHandlerWithArg fun arg = do
-  resp <- fun arg
-  case resp of
-    Left err -> throwError $ error $ pprintOgmiosDecodeError err
-    Right val -> pure val
-
+-- Helper that decodes a null
+aesonNull
+  :: forall (a :: Type)
+   . Aeson
+  -> Either JsonDecodeError Unit
+aesonNull = caseAesonNull (Left (TypeMismatch "Expected Null")) pure

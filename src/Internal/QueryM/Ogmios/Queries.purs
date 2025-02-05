@@ -1,4 +1,4 @@
-module Ctl.Internal.QueryM.OgmiosWebsocket.Queries
+module Ctl.Internal.QueryM.Ogmios.Queries
   ( module ExportDispatcher
   , module ExportServerConfig
   , ClusterSetup
@@ -10,7 +10,7 @@ module Ctl.Internal.QueryM.OgmiosWebsocket.Queries
 import Prelude
 
 import Cardano.Wallet.Key (PrivatePaymentKey, PrivateStakeKey)
-import Ctl.Internal.QueryM.OgmiosWebsocket.Dispatcher
+import Ctl.Internal.QueryM.Ogmios.Dispatcher
   ( DispatchError(JsonError, FaultError, ListenerCancelled)
   , Dispatcher
   , GenericPendingRequests
@@ -23,7 +23,7 @@ import Ctl.Internal.QueryM.OgmiosWebsocket.Dispatcher
   , newDispatcher
   , newPendingRequests
   ) as ExportDispatcher
-import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool (OgmiosWebSocket)
+import Ctl.Internal.QueryM.Ogmios.Mempool (OgmiosWebSocket)
 import Ctl.Internal.ServerConfig
   ( Host
   , ServerConfig

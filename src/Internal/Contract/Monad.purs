@@ -58,17 +58,17 @@ import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2 (OgmiosDecodeError, pprintOgmiosDecodeError)
 import Ctl.Internal.QueryM.Kupo (isTxConfirmedAff)
-import Ctl.Internal.QueryM.OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios
   ( getProtocolParameters
   , getSystemStartTime
   )
-import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket (_wsClose, _wsFinalize)
-import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
+import Ctl.Internal.QueryM.Ogmios.JsWebSocket (_wsClose, _wsFinalize)
+import Ctl.Internal.QueryM.Ogmios.Mempool
   ( WebSocket
   , mkOgmiosWebSocketAff
   , underlyingWebSocket
   )
-import Ctl.Internal.QueryM.OgmiosWebsocket.Queries (QueryEnv)
+import Ctl.Internal.QueryM.Ogmios.Queries (QueryEnv)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM
   , runBlockfrostServiceM

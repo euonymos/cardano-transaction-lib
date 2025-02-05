@@ -16,7 +16,7 @@ module Ctl.Internal.ServerConfig
 import Prelude
 
 import Ctl.Internal.Helpers ((<</>>))
-import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket (Url)
+import Ctl.Internal.QueryM.Ogmios.JsWebSocket (Url)
 import Data.Maybe (Maybe(Just, Nothing), fromMaybe)
 import Data.UInt (UInt)
 import Data.UInt as UInt

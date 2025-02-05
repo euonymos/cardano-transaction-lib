@@ -1,4 +1,4 @@
-module Ctl.Internal.QueryM.OgmiosWebsocket.Dispatcher
+module Ctl.Internal.QueryM.Ogmios.Dispatcher
   ( DispatchError(JsonError, FaultError, ListenerCancelled)
   , Dispatcher
   , GenericPendingRequests

@@ -23,13 +23,8 @@ import Ctl.Internal.Contract.Monad (wrapQueryM)
 import Ctl.Internal.Logging (Logger, mkLogger)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2 as JsonRpc2
-import Ctl.Internal.QueryM.Ogmios
-  ( MempoolSizeAndCapacity
-  , MempoolSnapshotAcquired
-  , MempoolTransaction(MempoolTransaction)
-  ) as Ogmios
-import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket (JsWebSocket)
-import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
+import Ctl.Internal.QueryM.Ogmios.JsWebSocket (JsWebSocket)
+import Ctl.Internal.QueryM.Ogmios.Mempool
   ( ListenerSet
   , OgmiosListeners
   , acquireMempoolSnapshotCall
@@ -41,6 +36,11 @@ import Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
   , releaseMempoolCall
   , underlyingWebSocket
   )
+import Ctl.Internal.QueryM.Ogmios.Types
+  ( MempoolSizeAndCapacity
+  , MempoolSnapshotAcquired
+  , MempoolTransaction(MempoolTransaction)
+  ) as Ogmios
 import Data.Array as Array
 import Data.ByteArray (hexToByteArray)
 import Data.List (List(Cons))

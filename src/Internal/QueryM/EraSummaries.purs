@@ -9,7 +9,7 @@ import Cardano.Types.EraSummaries (EraSummaries)
 import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.JsonRpc2 (pprintOgmiosDecodeError)
-import Ctl.Internal.QueryM.OgmiosHttp (eraSummaries) as OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios (eraSummaries) as OgmiosHttp
 import Data.Either (Either(Right, Left))
 import Data.Newtype (unwrap)
 import Effect.Exception (error)

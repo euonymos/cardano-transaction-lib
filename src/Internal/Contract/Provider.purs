@@ -27,12 +27,12 @@ import Ctl.Internal.QueryM.Kupo
   , isTxConfirmed
   , utxosAt
   ) as Kupo
-import Ctl.Internal.QueryM.Ogmios (SubmitTxR(SubmitFail, SubmitTxSuccess))
-import Ctl.Internal.QueryM.OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios
   ( evaluateTxOgmios
   , getChainTip
   , submitTxOgmios
   ) as OgmiosHttp
+import Ctl.Internal.QueryM.Ogmios.Types (SubmitTxR(SubmitFail, SubmitTxSuccess))
 import Ctl.Internal.QueryM.Pools
   ( getPoolIds
   , getPubKeyHashDelegationsAndRewards

@@ -1,4 +1,4 @@
-module Ctl.Internal.QueryM.OgmiosWebsocket.Mempool
+module Ctl.Internal.QueryM.Ogmios.Mempool
   ( acquireMempoolSnapshotAff
   , mempoolSnapshotHasTxAff
   , mempoolSnapshotNextTxAff
@@ -51,7 +51,31 @@ import Ctl.Internal.QueryM.JsonRpc2
   , ogmiosDecodeErrorToError
   )
 import Ctl.Internal.QueryM.JsonRpc2 as JsonRpc2
-import Ctl.Internal.QueryM.Ogmios
+import Ctl.Internal.QueryM.Ogmios.Dispatcher
+  ( DispatchError(JsonError)
+  , Dispatcher
+  , GenericPendingRequests
+  , PendingRequests
+  , PendingSubmitTxRequests
+  , RequestBody
+  , WebsocketDispatch
+  , mkWebsocketDispatch
+  , newDispatcher
+  , newPendingRequests
+  )
+import Ctl.Internal.QueryM.Ogmios.JsWebSocket
+  ( JsWebSocket
+  , Url
+  , _mkWebSocket
+  , _onWsConnect
+  , _onWsError
+  , _onWsMessage
+  , _removeOnWsError
+  , _wsClose
+  , _wsFinalize
+  , _wsSend
+  )
+import Ctl.Internal.QueryM.Ogmios.Types
   ( AdditionalUtxoSet
   , DelegationsAndRewardsR
   , HasTxR
@@ -62,7 +86,7 @@ import Ctl.Internal.QueryM.Ogmios
   , ReleasedMempool
   , StakePoolsQueryArgument
   )
-import Ctl.Internal.QueryM.Ogmios
+import Ctl.Internal.QueryM.Ogmios.Types
   ( ChainTipQR
   , CurrentEpoch
   , HasTxR
@@ -76,30 +100,6 @@ import Ctl.Internal.QueryM.Ogmios
   , SubmitTxR
   , submitSuccessPartialResp
   ) as Ogmios
-import Ctl.Internal.QueryM.OgmiosWebsocket.Dispatcher
-  ( DispatchError(JsonError)
-  , Dispatcher
-  , GenericPendingRequests
-  , PendingRequests
-  , PendingSubmitTxRequests
-  , RequestBody
-  , WebsocketDispatch
-  , mkWebsocketDispatch
-  , newDispatcher
-  , newPendingRequests
-  )
-import Ctl.Internal.QueryM.OgmiosWebsocket.JsWebSocket
-  ( JsWebSocket
-  , Url
-  , _mkWebSocket
-  , _onWsConnect
-  , _onWsError
-  , _onWsMessage
-  , _removeOnWsError
-  , _wsClose
-  , _wsFinalize
-  , _wsSend
-  )
 import Ctl.Internal.QueryM.UniqueId (ListenerId)
 import Ctl.Internal.ServerConfig (ServerConfig, mkWsUrl)
 import Data.Bifunctor (lmap)
