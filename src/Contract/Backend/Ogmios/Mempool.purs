@@ -36,7 +36,7 @@ import Ctl.Internal.QueryM.Ogmios.Mempool
   , releaseMempoolCall
   , underlyingWebSocket
   )
-import Ctl.Internal.QueryM.Ogmios.Types
+import Ctl.Internal.QueryM.Ogmios.Mempool
   ( MempoolSizeAndCapacity
   , MempoolSnapshotAcquired
   , MempoolTransaction(MempoolTransaction)

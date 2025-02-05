@@ -1,5 +1,11 @@
 module Ctl.Internal.QueryM.Ogmios.Mempool
-  ( acquireMempoolSnapshotAff
+  ( ReleasedMempool(ReleasedMempool)
+  , MempoolSizeAndCapacity(MempoolSizeAndCapacity)
+  , MempoolSnapshotAcquired
+  , MempoolTransaction(MempoolTransaction)
+  , HasTxR(HasTxR)
+  , MaybeMempoolTransaction(MaybeMempoolTransaction)
+  , acquireMempoolSnapshotAff
   , mempoolSnapshotHasTxAff
   , mempoolSnapshotNextTxAff
   , mempoolSnapshotSizeAndCapacityAff
@@ -30,15 +36,22 @@ module Ctl.Internal.QueryM.Ogmios.Mempool
 import Prelude
 
 import Aeson
-  ( class EncodeAeson
+  ( class DecodeAeson
+  , class EncodeAeson
   , Aeson
-  , JsonDecodeError(TypeMismatch)
+  , JsonDecodeError(UnexpectedValue, TypeMismatch)
+  , decodeAeson
   , encodeAeson
+  , getField
   , parseJsonStringToAeson
   , stringifyAeson
+  , (.:)
   )
+import Cardano.Provider.TxEvaluation (OgmiosTxId)
 import Cardano.Types.CborBytes (CborBytes)
+import Cardano.Types.Slot (Slot)
 import Cardano.Types.TransactionHash (TransactionHash)
+import Control.Alt ((<|>))
 import Control.Monad.Error.Class (liftEither, throwError)
 import Ctl.Internal.Logging (Logger)
 import Ctl.Internal.QueryM.JsonRpc2
@@ -47,6 +60,7 @@ import Ctl.Internal.QueryM.JsonRpc2
   , JsonRpc2Request
   , OgmiosDecodeError
   , decodeOgmios
+  , decodeResult
   , mkCallType
   , ogmiosDecodeErrorToError
   )
@@ -77,38 +91,33 @@ import Ctl.Internal.QueryM.Ogmios.JsWebSocket
   )
 import Ctl.Internal.QueryM.Ogmios.Types
   ( AdditionalUtxoSet
+  , ChainTipQR
+  , CurrentEpoch
   , DelegationsAndRewardsR
-  , HasTxR
-  , MaybeMempoolTransaction
+  , OgmiosEraSummaries
   , OgmiosProtocolParameters
+  , OgmiosSystemStart
   , OgmiosTxEvaluationR
   , PoolParametersR
-  , ReleasedMempool
   , StakePoolsQueryArgument
-  )
-import Ctl.Internal.QueryM.Ogmios.Types
-  ( ChainTipQR
-  , CurrentEpoch
-  , HasTxR
-  , MaybeMempoolTransaction
-  , MempoolSizeAndCapacity
-  , MempoolSnapshotAcquired
-  , MempoolTransaction
-  , OgmiosEraSummaries
-  , OgmiosSystemStart
-  , ReleasedMempool
   , SubmitTxR
+  , aesonNull
+  , aesonObject
+  , aesonString
   , submitSuccessPartialResp
-  ) as Ogmios
+  )
 import Ctl.Internal.QueryM.UniqueId (ListenerId)
 import Ctl.Internal.ServerConfig (ServerConfig, mkWsUrl)
+import Data.Argonaut.Encode.Encoders as Argonaut
 import Data.Bifunctor (lmap)
 import Data.Either (Either(Left, Right), either, isRight)
 import Data.Foldable (foldl)
+import Data.Generic.Rep (class Generic)
 import Data.Log.Level (LogLevel(Error, Debug))
 import Data.Map as Map
 import Data.Maybe (Maybe(Just, Nothing), maybe)
-import Data.Newtype (unwrap, wrap)
+import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Show.Generic (genericShow)
 import Data.Traversable (for_, traverse_)
 import Data.Tuple (fst)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -123,7 +132,7 @@ import Effect.Ref as Ref
 --------------------------------------------------------------------------------
 
 acquireMempoolSnapshotAff
-  :: OgmiosWebSocket -> Logger -> Aff Ogmios.MempoolSnapshotAcquired
+  :: OgmiosWebSocket -> Logger -> Aff MempoolSnapshotAcquired
 acquireMempoolSnapshotAff ogmiosWs logger =
   mkOgmiosRequestAff ogmiosWs logger acquireMempoolSnapshotCall
     _.acquireMempool
@@ -132,7 +141,7 @@ acquireMempoolSnapshotAff ogmiosWs logger =
 mempoolSnapshotHasTxAff
   :: OgmiosWebSocket
   -> Logger
-  -> Ogmios.MempoolSnapshotAcquired
+  -> MempoolSnapshotAcquired
   -> TransactionHash
   -> Aff Boolean
 mempoolSnapshotHasTxAff ogmiosWs logger ms txh =
@@ -144,8 +153,8 @@ mempoolSnapshotHasTxAff ogmiosWs logger ms txh =
 mempoolSnapshotSizeAndCapacityAff
   :: OgmiosWebSocket
   -> Logger
-  -> Ogmios.MempoolSnapshotAcquired
-  -> Aff Ogmios.MempoolSizeAndCapacity
+  -> MempoolSnapshotAcquired
+  -> Aff MempoolSizeAndCapacity
 mempoolSnapshotSizeAndCapacityAff ogmiosWs logger ms =
   mkOgmiosRequestAff ogmiosWs logger
     (mempoolSnapshotSizeAndCapacityCall ms)
@@ -155,7 +164,7 @@ mempoolSnapshotSizeAndCapacityAff ogmiosWs logger ms =
 releaseMempoolAff
   :: OgmiosWebSocket
   -> Logger
-  -> Ogmios.MempoolSnapshotAcquired
+  -> MempoolSnapshotAcquired
   -> Aff ReleasedMempool
 releaseMempoolAff ogmiosWs logger ms =
   mkOgmiosRequestAff ogmiosWs logger (releaseMempoolCall ms)
@@ -165,48 +174,48 @@ releaseMempoolAff ogmiosWs logger ms =
 mempoolSnapshotNextTxAff
   :: OgmiosWebSocket
   -> Logger
-  -> Ogmios.MempoolSnapshotAcquired
-  -> Aff (Maybe Ogmios.MempoolTransaction)
+  -> MempoolSnapshotAcquired
+  -> Aff (Maybe MempoolTransaction)
 mempoolSnapshotNextTxAff ogmiosWs logger ms = unwrap <$>
   mkOgmiosRequestAff ogmiosWs logger (mempoolSnapshotNextTxCall ms)
     _.mempoolNextTx
     unit
 
-acquireMempoolSnapshotCall :: JsonRpc2Call Unit Ogmios.MempoolSnapshotAcquired
+acquireMempoolSnapshotCall :: JsonRpc2Call Unit MempoolSnapshotAcquired
 acquireMempoolSnapshotCall =
   mkOgmiosCallTypeNoArgs "acquireMempool"
 
 mempoolSnapshotHasTxCall
-  :: Ogmios.MempoolSnapshotAcquired
-  -> JsonRpc2Call TransactionHash Ogmios.HasTxR
+  :: MempoolSnapshotAcquired
+  -> JsonRpc2Call TransactionHash HasTxR
 mempoolSnapshotHasTxCall _ = mkOgmiosCallType
   { method: "hasTransaction"
   , params: { id: _ }
   }
 
 mempoolSnapshotNextTxCall
-  :: Ogmios.MempoolSnapshotAcquired
-  -> JsonRpc2Call Unit Ogmios.MaybeMempoolTransaction
+  :: MempoolSnapshotAcquired
+  -> JsonRpc2Call Unit MaybeMempoolTransaction
 mempoolSnapshotNextTxCall _ = mkOgmiosCallType
   { method: "nextTransaction"
   , params: const { fields: "all" }
   }
 
 mempoolSnapshotSizeAndCapacityCall
-  :: Ogmios.MempoolSnapshotAcquired
-  -> JsonRpc2Call Unit Ogmios.MempoolSizeAndCapacity
+  :: MempoolSnapshotAcquired
+  -> JsonRpc2Call Unit MempoolSizeAndCapacity
 mempoolSnapshotSizeAndCapacityCall _ =
   mkOgmiosCallTypeNoArgs "sizeOfMempool"
 
 releaseMempoolCall
-  :: Ogmios.MempoolSnapshotAcquired -> JsonRpc2Call Unit Ogmios.ReleasedMempool
+  :: MempoolSnapshotAcquired -> JsonRpc2Call Unit ReleasedMempool
 releaseMempoolCall _ =
   mkOgmiosCallTypeNoArgs "releaseMempool"
 
 withMempoolSnapshot
   :: OgmiosWebSocket
   -> Logger
-  -> (Maybe Ogmios.MempoolSnapshotAcquired -> Aff Unit)
+  -> (Maybe MempoolSnapshotAcquired -> Aff Unit)
   -> Effect Unit
 withMempoolSnapshot ogmiosWs logger cont =
   flip runAff_ (acquireMempoolSnapshotAff ogmiosWs logger) $ case _ of
@@ -362,7 +371,7 @@ resendPendingSubmitRequests
       label <> ": " <> show value <> " TransactionHash: " <> show txHash
 
   handlePendingSubmitRequest
-    :: Ogmios.MempoolSnapshotAcquired
+    :: MempoolSnapshotAcquired
     -> ListenerId
     -> RequestBody
     -> TransactionHash
@@ -386,11 +395,11 @@ resendPendingSubmitRequests
       dispatchMap <- Ref.read dispatcher
       Ref.modify_ (Map.delete listenerId) dispatcher
       Map.lookup listenerId dispatchMap #
-        maybe (pure unit) (_ $ submitSuccessPartialResp)
+        maybe (pure unit) (_ $ submitSuccessPartialRespInner)
     where
-    submitSuccessPartialResp :: Aeson
-    submitSuccessPartialResp =
-      encodeAeson $ Ogmios.submitSuccessPartialResp txHash
+    submitSuccessPartialRespInner :: Aeson
+    submitSuccessPartialRespInner =
+      encodeAeson $ submitSuccessPartialResp txHash
 
 --------------------------------------------------------------------------------
 -- `MkServiceWebSocketLens` for ogmios
@@ -468,19 +477,19 @@ mkOgmiosWebSocketLens logger isTxConfirmed = do
 --------------------------------------------------------------------------------
 
 type OgmiosListeners =
-  { chainTip :: ListenerSet Unit Ogmios.ChainTipQR
+  { chainTip :: ListenerSet Unit ChainTipQR
   , submit :: SubmitTxListenerSet
   , evaluate ::
       ListenerSet (CborBytes /\ AdditionalUtxoSet) OgmiosTxEvaluationR
   , getProtocolParameters :: ListenerSet Unit OgmiosProtocolParameters
-  , eraSummaries :: ListenerSet Unit Ogmios.OgmiosEraSummaries
-  , currentEpoch :: ListenerSet Unit Ogmios.CurrentEpoch
-  , systemStart :: ListenerSet Unit Ogmios.OgmiosSystemStart
-  , acquireMempool :: ListenerSet Unit Ogmios.MempoolSnapshotAcquired
+  , eraSummaries :: ListenerSet Unit OgmiosEraSummaries
+  , currentEpoch :: ListenerSet Unit CurrentEpoch
+  , systemStart :: ListenerSet Unit OgmiosSystemStart
+  , acquireMempool :: ListenerSet Unit MempoolSnapshotAcquired
   , releaseMempool :: ListenerSet Unit ReleasedMempool
   , mempoolHasTx :: ListenerSet TransactionHash HasTxR
   , mempoolNextTx :: ListenerSet Unit MaybeMempoolTransaction
-  , mempoolSizeAndCapacity :: ListenerSet Unit Ogmios.MempoolSizeAndCapacity
+  , mempoolSizeAndCapacity :: ListenerSet Unit MempoolSizeAndCapacity
   , stakePools :: ListenerSet StakePoolsQueryArgument PoolParametersR
   , delegationsAndRewards :: ListenerSet (Array String) DelegationsAndRewardsR
   }
@@ -499,7 +508,7 @@ type ListenerSet (request :: Type) (response :: Type) =
   }
 
 type SubmitTxListenerSet = ListenerSet (TransactionHash /\ CborBytes)
-  Ogmios.SubmitTxR
+  SubmitTxR
 
 mkAddMessageListener
   :: forall (response :: Type)
@@ -651,3 +660,100 @@ messageFoldF msg acc' func = do
   acc <- acc'
   if isRight acc then acc' else func msg
 
+--------------------------------------------------------------------------------
+
+-- Local Tx Monitor Query Response & Parsing
+--------------------------------------------------------------------------------
+
+newtype HasTxR = HasTxR Boolean
+
+derive instance Newtype HasTxR _
+
+instance DecodeOgmios HasTxR where
+  decodeOgmios = decodeResult (map HasTxR <<< decodeAeson)
+
+newtype MempoolSnapshotAcquired = AwaitAcquired Slot
+
+instance Show MempoolSnapshotAcquired where
+  show (AwaitAcquired slot) = "(AwaitAcquired " <> show slot <> ")"
+
+instance DecodeAeson MempoolSnapshotAcquired where
+  decodeAeson =
+    -- todo: ignoring "acquired": "mempool"
+    map AwaitAcquired <<< aesonObject (flip getField "slot")
+
+instance DecodeOgmios MempoolSnapshotAcquired where
+  decodeOgmios = decodeResult decodeAeson
+
+-- | The acquired snapshot’s size (in bytes), number of transactions, and capacity
+-- | (in bytes).
+newtype MempoolSizeAndCapacity = MempoolSizeAndCapacity
+  { capacity :: Prim.Int
+  , currentSize :: Prim.Int
+  , numberOfTxs :: Prim.Int
+  }
+
+derive instance Generic MempoolSizeAndCapacity _
+derive instance Newtype MempoolSizeAndCapacity _
+
+instance Show MempoolSizeAndCapacity where
+  show = genericShow
+
+instance DecodeAeson MempoolSizeAndCapacity where
+  decodeAeson = aesonObject \o -> do
+    capacity <- getField o "maxCapacity" >>= flip getField "bytes"
+    currentSize <- getField o "currentSize" >>= flip getField "bytes"
+    numberOfTxs <- getField o "transactions" >>= flip getField "count"
+    pure $ wrap { capacity, currentSize, numberOfTxs }
+
+instance DecodeOgmios MempoolSizeAndCapacity where
+  decodeOgmios = decodeResult decodeAeson
+
+newtype MempoolTransaction = MempoolTransaction
+  { id :: OgmiosTxId
+  , raw :: String -- hex encoded transaction cbor
+  }
+
+derive instance Generic MempoolTransaction _
+derive instance Newtype MempoolTransaction _
+
+newtype MaybeMempoolTransaction = MaybeMempoolTransaction
+  (Maybe MempoolTransaction)
+
+instance DecodeAeson MaybeMempoolTransaction where
+  decodeAeson aeson = do
+    { transaction: tx } :: { transaction :: Aeson } <- decodeAeson aeson
+    res <-
+      ( do
+          tx' :: { id :: String, cbor :: String } <- decodeAeson tx
+          pure $ Just $ MempoolTransaction { id: tx'.id, raw: tx'.cbor }
+      ) <|>
+        ( do
+            aesonNull tx
+            pure Nothing
+        )
+    pure $ MaybeMempoolTransaction $ res
+
+derive instance Newtype MaybeMempoolTransaction _
+
+instance DecodeOgmios MaybeMempoolTransaction where
+  decodeOgmios = decodeResult decodeAeson
+
+data ReleasedMempool = ReleasedMempool
+
+derive instance Generic ReleasedMempool _
+
+instance Show ReleasedMempool where
+  show = genericShow
+
+instance DecodeAeson ReleasedMempool where
+  decodeAeson = aesonObject \o -> do
+    released <- o .: "released"
+    flip aesonString released $ \s ->
+      if s == "mempool" then
+        pure $ ReleasedMempool
+      else
+        Left (UnexpectedValue $ Argonaut.encodeString s)
+
+instance DecodeOgmios ReleasedMempool where
+  decodeOgmios = decodeResult decodeAeson

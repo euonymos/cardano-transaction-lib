@@ -17,7 +17,7 @@ import Contract.Test (ContractTest, InitialUTxOs, withKeyWallet, withWallets)
 import Contract.Test.Mote (TestPlanM)
 import Contract.Transaction (awaitTxConfirmed)
 import Ctl.Examples.PlutusV2.InlineDatum as InlineDatum
-import Ctl.Internal.QueryM.Ogmios.Types
+import Ctl.Internal.QueryM.Ogmios.Mempool
   ( MempoolSizeAndCapacity(MempoolSizeAndCapacity)
   )
 import Data.Array (length)

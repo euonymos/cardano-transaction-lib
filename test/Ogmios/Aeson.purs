@@ -15,9 +15,12 @@ import Ctl.Internal.QueryM.JsonRpc2
   , OgmiosDecodeError(ErrorResponse)
   , decodeOgmios
   )
-import Ctl.Internal.QueryM.Ogmios.Types
+import Ctl.Internal.QueryM.Ogmios.Mempool
   ( HasTxR
-  , OgmiosTxEvaluationR
+  , MempoolSizeAndCapacity
+  ) as Mempool
+import Ctl.Internal.QueryM.Ogmios.Types
+  ( OgmiosTxEvaluationR
   , SubmitTxR
   , aesonObject
   )
@@ -65,8 +68,8 @@ tested =
     )
   , ("evaluateTransaction" /\ check (Proxy :: _ OgmiosTxEvaluationR))
   , ("submitTransaction" /\ check (Proxy :: _ SubmitTxR))
-  , ("hasTransaction" /\ check (Proxy :: _ HasTxR))
-  , ("sizeOfMempool" /\ check (Proxy :: _ O.MempoolSizeAndCapacity))
+  , ("hasTransaction" /\ check (Proxy :: _ Mempool.HasTxR))
+  , ("sizeOfMempool" /\ check (Proxy :: _ Mempool.MempoolSizeAndCapacity))
   -- ignoring because response may lack tx cbor if not run with flag
   -- This endpoint is tested with "fetchMempoolTXs" test (Test.Ctl.Plutip.Contract.OgmiosMempool)
   -- , ("nextTransaction" /\ (Proxy :: _ MaybeMempoolTransaction ))

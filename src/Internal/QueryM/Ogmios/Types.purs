@@ -6,28 +6,24 @@ module Ctl.Internal.QueryM.Ogmios.Types
   , ChainTipQR(CtChainOrigin, CtChainPoint)
   , CurrentEpoch(CurrentEpoch)
   , DelegationsAndRewardsR(DelegationsAndRewardsR)
-  , MempoolSizeAndCapacity(MempoolSizeAndCapacity)
-  , MempoolSnapshotAcquired
-  , MempoolTransaction(MempoolTransaction)
   , OgmiosBlockHeaderHash(OgmiosBlockHeaderHash)
   , OgmiosProtocolParameters(OgmiosProtocolParameters)
   , PParamRational(PParamRational)
   , PoolParameters
   , PoolParametersR(PoolParametersR)
-  , ReleasedMempool(ReleasedMempool)
   , AdditionalUtxoSet(AdditionalUtxoSet)
   , OgmiosUtxoMap
   , OgmiosEraSummaries(OgmiosEraSummaries)
   , OgmiosSystemStart(OgmiosSystemStart)
   , SubmitTxR(SubmitTxSuccess, SubmitFail)
   , StakePoolsQueryArgument(StakePoolsQueryArgument)
-  , HasTxR(HasTxR)
-  , MaybeMempoolTransaction(MaybeMempoolTransaction)
   , OgmiosTxEvaluationR(OgmiosTxEvaluationR)
   , aesonObject
   , submitSuccessPartialResp
   , parseIpv6String
   , rationalToSubcoin
+  , aesonNull
+  , aesonString
   ) where
 
 import Prelude
@@ -36,7 +32,7 @@ import Aeson
   ( class DecodeAeson
   , class EncodeAeson
   , Aeson
-  , JsonDecodeError(AtKey, TypeMismatch, UnexpectedValue, MissingValue)
+  , JsonDecodeError(TypeMismatch, MissingValue, AtKey)
   , caseAesonArray
   , caseAesonNull
   , caseAesonObject
@@ -54,7 +50,6 @@ import Aeson
 import Cardano.AsCbor (decodeCbor, encodeCbor)
 import Cardano.Provider.TxEvaluation
   ( ExecutionUnits
-  , OgmiosTxId
   , OgmiosTxOut
   , OgmiosTxOutRef
   , RedeemerPointer
@@ -142,7 +137,6 @@ import Ctl.Internal.Types.SystemStart
   , sysStartFromOgmiosTimestamp
   , sysStartToOgmiosTimestamp
   )
-import Data.Argonaut.Encode.Encoders as Argonaut
 import Data.Array (catMaybes)
 import Data.Array (fromFoldable, length, replicate) as Array
 import Data.Bifunctor (lmap)
@@ -171,104 +165,6 @@ import Foreign.Object as Object
 import JS.BigInt as BigInt
 import Untagged.TypeCheck (class HasRuntimeType)
 import Untagged.Union (type (|+|), toEither1)
-
---------------------------------------------------------------------------------
-
--- Local Tx Monitor Query Response & Parsing
---------------------------------------------------------------------------------
-
-newtype HasTxR = HasTxR Boolean
-
-derive instance Newtype HasTxR _
-
-instance DecodeOgmios HasTxR where
-  decodeOgmios = decodeResult (map HasTxR <<< decodeAeson)
-
-newtype MempoolSnapshotAcquired = AwaitAcquired Slot
-
-instance Show MempoolSnapshotAcquired where
-  show (AwaitAcquired slot) = "(AwaitAcquired " <> show slot <> ")"
-
-instance DecodeAeson MempoolSnapshotAcquired where
-  decodeAeson =
-    -- todo: ignoring "acquired": "mempool"
-    map AwaitAcquired <<< aesonObject (flip getField "slot")
-
-instance DecodeOgmios MempoolSnapshotAcquired where
-  decodeOgmios = decodeResult decodeAeson
-
--- | The acquired snapshot’s size (in bytes), number of transactions, and capacity
--- | (in bytes).
-newtype MempoolSizeAndCapacity = MempoolSizeAndCapacity
-  { capacity :: Prim.Int
-  , currentSize :: Prim.Int
-  , numberOfTxs :: Prim.Int
-  }
-
-derive instance Generic MempoolSizeAndCapacity _
-derive instance Newtype MempoolSizeAndCapacity _
-
-instance Show MempoolSizeAndCapacity where
-  show = genericShow
-
-instance DecodeAeson MempoolSizeAndCapacity where
-  decodeAeson = aesonObject \o -> do
-    capacity <- getField o "maxCapacity" >>= flip getField "bytes"
-    currentSize <- getField o "currentSize" >>= flip getField "bytes"
-    numberOfTxs <- getField o "transactions" >>= flip getField "count"
-    pure $ wrap { capacity, currentSize, numberOfTxs }
-
-instance DecodeOgmios MempoolSizeAndCapacity where
-  decodeOgmios = decodeResult decodeAeson
-
-newtype MempoolTransaction = MempoolTransaction
-  { id :: OgmiosTxId
-  , raw :: String -- hex encoded transaction cbor
-  }
-
-derive instance Generic MempoolTransaction _
-derive instance Newtype MempoolTransaction _
-
-newtype MaybeMempoolTransaction = MaybeMempoolTransaction
-  (Maybe MempoolTransaction)
-
-instance DecodeAeson MaybeMempoolTransaction where
-  decodeAeson aeson = do
-    { transaction: tx } :: { transaction :: Aeson } <- decodeAeson aeson
-    res <-
-      ( do
-          tx' :: { id :: String, cbor :: String } <- decodeAeson tx
-          pure $ Just $ MempoolTransaction { id: tx'.id, raw: tx'.cbor }
-      ) <|>
-        ( do
-            aesonNull tx
-            pure Nothing
-        )
-    pure $ MaybeMempoolTransaction $ res
-
-derive instance Newtype MaybeMempoolTransaction _
-
-instance DecodeOgmios MaybeMempoolTransaction where
-  decodeOgmios = decodeResult decodeAeson
-
-data ReleasedMempool = ReleasedMempool
-
-derive instance Generic ReleasedMempool _
-
-instance Show ReleasedMempool where
-  show = genericShow
-
-instance DecodeAeson ReleasedMempool where
-  decodeAeson = aesonObject \o -> do
-    released <- o .: "released"
-    flip aesonString released $ \s ->
-      if s == "mempool" then
-        pure $ ReleasedMempool
-      else
-        Left (UnexpectedValue $ Argonaut.encodeString s)
-
-instance DecodeOgmios ReleasedMempool where
-  decodeOgmios = decodeResult decodeAeson
 
 ---------------- TX SUBMISSION QUERY RESPONSE & PARSING
 
