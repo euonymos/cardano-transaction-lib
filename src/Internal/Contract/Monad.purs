@@ -331,9 +331,6 @@ getLedgerConstants params = case _ of
     -> BlockfrostServiceM a
   withErrorOnLeft = (=<<) (lmap (show >>> error) >>> liftEither)
 
-  logger :: Logger
-  logger = mkLogger params.logLevel params.customLogger
-
   -- TODO: Should we respect `suppressLogs` here?
   blockfrostLogger :: Message -> Aff Unit
   blockfrostLogger = fromMaybe logWithLevel params.customLogger params.logLevel
