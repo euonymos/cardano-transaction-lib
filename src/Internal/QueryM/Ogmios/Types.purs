@@ -471,7 +471,7 @@ parseIpv6String str = do
     padded = String.replaceAll (Pattern " ") (Replacement "0") $ fold $
       partsFixed
         <#> StringUtils.padStart 4
-  decodeCbor <<< wrap =<< hexToByteArray padded
+  decodeCbor <<< wrap =<< hexToByteArray ("50" <> padded)
 
 decodeRelay :: Aeson -> Either JsonDecodeError Relay
 decodeRelay aeson = do
