@@ -67,7 +67,7 @@ import Ctl.Internal.QueryM.Ogmios.Mempool
   , mkOgmiosWebSocketAff
   , underlyingWebSocket
   )
-import Ctl.Internal.QueryM.Ogmios.Queries (QueryEnv)
+import Ctl.Internal.QueryM.Ogmios.QueryEnv (QueryEnv)
 import Ctl.Internal.QueryM.Ogmios.Types
   ( OgmiosDecodeError
   , pprintOgmiosDecodeError

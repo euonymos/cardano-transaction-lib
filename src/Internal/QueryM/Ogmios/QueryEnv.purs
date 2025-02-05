@@ -1,4 +1,4 @@
-module Ctl.Internal.QueryM.Ogmios.Queries
+module Ctl.Internal.QueryM.Ogmios.QueryEnv
   ( module ExportDispatcher
   , module ExportServerConfig
   , ClusterSetup
