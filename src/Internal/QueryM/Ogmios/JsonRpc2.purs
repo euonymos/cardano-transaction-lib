@@ -18,7 +18,6 @@ import Aeson
   , encodeAeson
   , getField
   )
-import Ctl.Internal.QueryM.UniqueId (ListenerId, uniqueId)
 import Data.Either (Either(Left))
 import Effect (Effect)
 import Foreign.Object (Object)
@@ -30,18 +29,19 @@ type JsonRpc2Request (a :: Type) =
   { jsonrpc :: String
   , method :: String
   , params :: a
-  , id :: ListenerId
+  , id :: String
   }
 
 -- | Convenience helper function for creating `JsonRpc2Request a` objects
 mkJsonRpc2Request
   :: forall (a :: Type)
-   . { jsonrpc :: String }
+   . (String -> Effect String)
+  -> { jsonrpc :: String }
   -> { method :: String
      , params :: a
      }
   -> Effect (JsonRpc2Request a)
-mkJsonRpc2Request service method = do
+mkJsonRpc2Request uniqueId service method = do
   id <- uniqueId $ method.method <> "-"
   pure
     $ Record.merge { id }
@@ -57,11 +57,12 @@ newtype JsonRpc2Call (i :: Type) (o :: Type) = JsonRpc2Call
 mkCallType
   :: forall (a :: Type) (i :: Type) (o :: Type)
    . EncodeAeson (JsonRpc2Request a)
-  => { jsonrpc :: String }
+  => (String -> Effect String)
+  -> { jsonrpc :: String }
   -> { method :: String, params :: i -> a }
   -> JsonRpc2Call i o
-mkCallType service { method, params } = JsonRpc2Call \i -> do
-  req <- mkJsonRpc2Request service { method, params: params i }
+mkCallType uniqueId service { method, params } = JsonRpc2Call \i -> do
+  req <- mkJsonRpc2Request uniqueId service { method, params: params i }
   pure { body: encodeAeson req, id: req.id }
 
 -- | Create a JsonRpc2 request body and id
@@ -75,7 +76,7 @@ buildRequest (JsonRpc2Call c) = c
 -- | Parse just ID from the response
 parseJsonRpc2ResponseId
   :: Aeson
-  -> Either JsonDecodeError ListenerId
+  -> Either JsonDecodeError String
 parseJsonRpc2ResponseId =
   aesonObject $ flip getField "id"
 

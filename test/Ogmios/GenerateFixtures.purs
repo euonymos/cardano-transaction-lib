@@ -29,11 +29,8 @@ import Ctl.Internal.QueryM.Ogmios.Mempool
   , mkRequestAff
   )
 import Ctl.Internal.QueryM.Ogmios.Types (class DecodeOgmios)
-import Ctl.Internal.ServerConfig
-  ( ServerConfig
-  , defaultOgmiosWsConfig
-  , mkWsUrl
-  )
+import Ctl.Internal.QueryM.UniqueId (uniqueId)
+import Ctl.Internal.ServerConfig (ServerConfig, defaultOgmiosWsConfig, mkWsUrl)
 import Data.Either (Either(Left, Right))
 import Data.Log.Level (LogLevel(Trace, Debug))
 import Data.Map as Map
@@ -107,7 +104,7 @@ instance DecodeOgmios AesonResponse where
 
 mkQueryWithArgs' :: forall a. EncodeAeson a => String -> a -> Query
 mkQueryWithArgs' method a = Query
-  (mkOgmiosCallType { method, params: identity })
+  (mkOgmiosCallType uniqueId { method, params: identity })
   (sanitiseMethod method)
   (encodeAeson a)
 

@@ -41,6 +41,7 @@ import Ctl.Internal.QueryM.Ogmios.Mempool
   , MempoolSnapshotAcquired
   , MempoolTransaction(MempoolTransaction)
   ) as Ogmios
+import Ctl.Internal.QueryM.UniqueId (uniqueId)
 import Data.Array as Array
 import Data.ByteArray (hexToByteArray)
 import Data.List (List(Cons))
@@ -116,7 +117,7 @@ acquireMempoolSnapshotFetch
   :: QueryM Ogmios.MempoolSnapshotAcquired
 acquireMempoolSnapshotFetch =
   mkOgmiosRequest
-    acquireMempoolSnapshotCall
+    (acquireMempoolSnapshotCall uniqueId)
     _.acquireMempool
     unit
 
@@ -126,7 +127,7 @@ mempoolSnapshotHasTxFetch
   -> QueryM Boolean
 mempoolSnapshotHasTxFetch ms txh =
   unwrap <$> mkOgmiosRequest
-    (mempoolSnapshotHasTxCall ms)
+    (mempoolSnapshotHasTxCall uniqueId ms)
     _.mempoolHasTx
     txh
 
@@ -135,7 +136,7 @@ mempoolSnapshotSizeAndCapacityFetch
   -> QueryM Ogmios.MempoolSizeAndCapacity
 mempoolSnapshotSizeAndCapacityFetch ms =
   mkOgmiosRequest
-    (mempoolSnapshotSizeAndCapacityCall ms)
+    (mempoolSnapshotSizeAndCapacityCall uniqueId ms)
     _.mempoolSizeAndCapacity
     unit
 
@@ -144,7 +145,7 @@ releaseMempoolFetch
   -> QueryM Unit
 releaseMempoolFetch ms =
   unit <$ mkOgmiosRequest
-    (releaseMempoolCall ms)
+    (releaseMempoolCall uniqueId ms)
     _.releaseMempool
     unit
 
@@ -153,7 +154,7 @@ mempoolSnapshotNextTxFetch
   -> QueryM (Maybe Ogmios.MempoolTransaction)
 mempoolSnapshotNextTxFetch ms =
   unwrap <$> mkOgmiosRequest
-    (mempoolSnapshotNextTxCall ms)
+    (mempoolSnapshotNextTxCall uniqueId ms)
     _.mempoolNextTx
     unit
 

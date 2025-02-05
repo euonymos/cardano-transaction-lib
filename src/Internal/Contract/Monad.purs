@@ -57,10 +57,7 @@ import Ctl.Internal.Helpers (filterMapWithKeyM, liftM, logWithLevel)
 import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
 import Ctl.Internal.QueryM (QueryM)
 import Ctl.Internal.QueryM.Kupo (isTxConfirmedAff)
-import Ctl.Internal.QueryM.Ogmios
-  ( getProtocolParameters
-  , getSystemStartTime
-  )
+import Ctl.Internal.QueryM.Ogmios (getProtocolParameters, getSystemStartTime)
 import Ctl.Internal.QueryM.Ogmios.JsWebSocket (_wsClose, _wsFinalize)
 import Ctl.Internal.QueryM.Ogmios.Mempool
   ( WebSocket
@@ -72,6 +69,8 @@ import Ctl.Internal.QueryM.Ogmios.Types
   ( OgmiosDecodeError
   , pprintOgmiosDecodeError
   )
+import Ctl.Internal.QueryM.UniqueId (uniqueId)
+import Ctl.Internal.ServerConfig (mkWsUrl)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM
   , runBlockfrostServiceM
@@ -277,7 +276,8 @@ buildBackend logger = case _ of
   buildCtlBackend :: CtlBackendParams -> Aff CtlBackend
   buildCtlBackend { ogmiosConfig, kupoConfig } = do
     let isTxConfirmed = map isRight <<< isTxConfirmedAff kupoConfig
-    ogmiosWs <- mkOgmiosWebSocketAff isTxConfirmed logger ogmiosConfig
+    ogmiosWs <- mkOgmiosWebSocketAff uniqueId isTxConfirmed logger
+      (mkWsUrl ogmiosConfig)
     pure
       { ogmios:
           { config: ogmiosConfig

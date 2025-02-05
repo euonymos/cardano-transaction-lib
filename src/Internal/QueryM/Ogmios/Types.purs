@@ -139,7 +139,6 @@ import Cardano.Types.Value (Value, getMultiAsset, valueToCoin)
 import Control.Alt ((<|>))
 import Control.Alternative (guard)
 import Ctl.Internal.Helpers (encodeMap, showWithParens)
-import Ctl.Internal.QueryM.UniqueId (ListenerId)
 import Ctl.Internal.Types.ProtocolParameters
   ( ProtocolParameters(ProtocolParameters)
   )
@@ -1126,7 +1125,7 @@ type JsonRpc2Response =
   , method :: Maybe String
   , result :: Maybe Aeson
   , error :: Maybe Aeson
-  , id :: ListenerId
+  , id :: String
   }
 
 decodeAesonJsonRpc2Response

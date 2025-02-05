@@ -1,7 +1,5 @@
 module Ctl.Internal.QueryM.Ogmios.QueryEnv
-  ( module ExportDispatcher
-  , module ExportServerConfig
-  , ClusterSetup
+  ( ClusterSetup
   , QueryConfig
   , QueryEnv
   , QueryRuntime
@@ -10,28 +8,7 @@ module Ctl.Internal.QueryM.Ogmios.QueryEnv
 import Prelude
 
 import Cardano.Wallet.Key (PrivatePaymentKey, PrivateStakeKey)
-import Ctl.Internal.QueryM.Ogmios.Dispatcher
-  ( DispatchError(JsonError, FaultError, ListenerCancelled)
-  , Dispatcher
-  , GenericPendingRequests
-  , PendingRequests
-  , PendingSubmitTxRequests
-  , RequestBody
-  , WebsocketDispatch
-  , dispatchErrorToError
-  , mkWebsocketDispatch
-  , newDispatcher
-  , newPendingRequests
-  ) as ExportDispatcher
 import Ctl.Internal.QueryM.Ogmios.Mempool (OgmiosWebSocket)
-import Ctl.Internal.ServerConfig
-  ( Host
-  , ServerConfig
-  , defaultOgmiosWsConfig
-  , mkHttpUrl
-  , mkServerUrl
-  , mkWsUrl
-  ) as ExportServerConfig
 import Ctl.Internal.ServerConfig (ServerConfig)
 import Data.Log.Level (LogLevel)
 import Data.Log.Message (Message)

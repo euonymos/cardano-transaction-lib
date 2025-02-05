@@ -10,6 +10,7 @@ module Ctl.Internal.QueryM.Ogmios.Dispatcher
   , mkWebsocketDispatch
   , newDispatcher
   , newPendingRequests
+  , ListenerId
   ) where
 
 import Prelude
@@ -17,7 +18,6 @@ import Prelude
 import Aeson (Aeson, JsonDecodeError, stringifyAeson)
 import Cardano.Types.TransactionHash (TransactionHash)
 import Ctl.Internal.QueryM.Ogmios.JsonRpc2 (parseJsonRpc2ResponseId)
-import Ctl.Internal.QueryM.UniqueId (ListenerId)
 import Data.Either (Either(Left, Right))
 import Data.Map (Map)
 import Data.Map (empty, lookup) as Map
@@ -27,6 +27,8 @@ import Effect (Effect)
 import Effect.Exception (Error, error)
 import Effect.Ref (Ref)
 import Effect.Ref (new, read) as Ref
+
+type ListenerId = String
 
 data DispatchError
   = JsonError JsonDecodeError
