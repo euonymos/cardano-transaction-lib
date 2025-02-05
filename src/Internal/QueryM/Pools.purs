@@ -16,9 +16,11 @@ import Cardano.Types.ScriptHash as ScriptHash
 import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.Helpers (liftM)
 import Ctl.Internal.QueryM (QueryM)
-import Ctl.Internal.QueryM.JsonRpc2 (pprintOgmiosDecodeError)
 import Ctl.Internal.QueryM.Ogmios as Ogmios
-import Ctl.Internal.QueryM.Ogmios.Types (PoolParameters)
+import Ctl.Internal.QueryM.Ogmios.Types
+  ( PoolParameters
+  , pprintOgmiosDecodeError
+  )
 import Ctl.Internal.Types.StakeValidatorHash (StakeValidatorHash)
 import Data.ByteArray (byteArrayToHex)
 import Data.Either (Either(Right, Left))

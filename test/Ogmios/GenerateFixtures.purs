@@ -7,7 +7,6 @@ import Prelude
 import Aeson (class EncodeAeson, Aeson, encodeAeson, stringifyAeson)
 import Control.Parallel (parTraverse)
 import Ctl.Internal.Helpers (logString)
-import Ctl.Internal.QueryM.JsonRpc2 (class DecodeOgmios, JsonRpc2Call)
 import Ctl.Internal.QueryM.Ogmios.Dispatcher
   ( WebsocketDispatch
   , mkWebsocketDispatch
@@ -20,6 +19,7 @@ import Ctl.Internal.QueryM.Ogmios.JsWebSocket
   , _wsClose
   , _wsSend
   )
+import Ctl.Internal.QueryM.Ogmios.JsonRpc2 (JsonRpc2Call)
 import Ctl.Internal.QueryM.Ogmios.Mempool
   ( ListenerSet
   , WebSocket(WebSocket)
@@ -28,6 +28,7 @@ import Ctl.Internal.QueryM.Ogmios.Mempool
   , mkOgmiosCallType
   , mkRequestAff
   )
+import Ctl.Internal.QueryM.Ogmios.Types (class DecodeOgmios)
 import Ctl.Internal.ServerConfig
   ( ServerConfig
   , defaultOgmiosWsConfig

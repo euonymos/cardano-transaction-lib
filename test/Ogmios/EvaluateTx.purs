@@ -13,11 +13,11 @@ import Cardano.Provider.TxEvaluation
 import Cardano.Types (BigNum)
 import Cardano.Types.BigNum as BigNum
 import Cardano.Types.RedeemerTag (RedeemerTag(Spend, Cert, Reward))
-import Ctl.Internal.QueryM.JsonRpc2
+import Ctl.Internal.QueryM.Ogmios.Types
   ( OgmiosDecodeError(ResultDecodingError)
+  , OgmiosTxEvaluationR
   , decodeOgmios
   )
-import Ctl.Internal.QueryM.Ogmios.Types (OgmiosTxEvaluationR)
 import Data.Either (Either(Left, Right))
 import Data.Map as Map
 import Data.Maybe (fromJust)

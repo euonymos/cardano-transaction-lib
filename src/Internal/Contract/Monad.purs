@@ -56,7 +56,6 @@ import Ctl.Internal.Contract.ProviderBackend
 import Ctl.Internal.Helpers (filterMapWithKeyM, liftM, logWithLevel)
 import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
 import Ctl.Internal.QueryM (QueryM)
-import Ctl.Internal.QueryM.JsonRpc2 (OgmiosDecodeError, pprintOgmiosDecodeError)
 import Ctl.Internal.QueryM.Kupo (isTxConfirmedAff)
 import Ctl.Internal.QueryM.Ogmios
   ( getProtocolParameters
@@ -69,6 +68,10 @@ import Ctl.Internal.QueryM.Ogmios.Mempool
   , underlyingWebSocket
   )
 import Ctl.Internal.QueryM.Ogmios.Queries (QueryEnv)
+import Ctl.Internal.QueryM.Ogmios.Types
+  ( OgmiosDecodeError
+  , pprintOgmiosDecodeError
+  )
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM
   , runBlockfrostServiceM

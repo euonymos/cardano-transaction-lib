@@ -16,7 +16,7 @@ import Prelude
 
 import Aeson (Aeson, JsonDecodeError, stringifyAeson)
 import Cardano.Types.TransactionHash (TransactionHash)
-import Ctl.Internal.QueryM.JsonRpc2 (parseJsonRpc2ResponseId)
+import Ctl.Internal.QueryM.Ogmios.JsonRpc2 (parseJsonRpc2ResponseId)
 import Ctl.Internal.QueryM.UniqueId (ListenerId)
 import Data.Either (Either(Left, Right))
 import Data.Map (Map)

@@ -33,17 +33,13 @@ import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Control.Monad.Reader.Class (asks)
 import Ctl.Internal.Affjax (request) as Affjax
 import Ctl.Internal.QueryM (QueryM)
-import Ctl.Internal.QueryM.JsonRpc2
-  ( class DecodeOgmios
-  , OgmiosDecodeError(ResultDecodingError, ClientErrorResponse)
-  , decodeOgmios
-  , pprintOgmiosDecodeError
-  )
 import Ctl.Internal.QueryM.Ogmios.Types
-  ( AdditionalUtxoSet
+  ( class DecodeOgmios
+  , AdditionalUtxoSet
   , ChainTipQR(CtChainPoint, CtChainOrigin)
   , CurrentEpoch
   , DelegationsAndRewardsR
+  , OgmiosDecodeError(ResultDecodingError, ClientErrorResponse)
   , OgmiosEraSummaries
   , OgmiosProtocolParameters
   , OgmiosSystemStart
@@ -51,6 +47,8 @@ import Ctl.Internal.QueryM.Ogmios.Types
   , PoolParametersR
   , StakePoolsQueryArgument
   , SubmitTxR
+  , decodeOgmios
+  , pprintOgmiosDecodeError
   )
 import Ctl.Internal.ServerConfig (ServerConfig, mkHttpUrl)
 import Data.Bifunctor (lmap)

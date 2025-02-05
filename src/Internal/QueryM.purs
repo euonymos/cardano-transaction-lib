@@ -1,7 +1,5 @@
 -- | CTL query layer monad.
--- | This module defines an Aff interface for Ogmios Websocket Queries.
--- | Since WebSockets do not define a mechanism for linking request/response.
--- | Or for verifying that the connection is live, those concerns are addressed here
+-- | This module defines an Aff interface for backend queries.
 module Ctl.Internal.QueryM
   ( QueryM
   , ParQueryM

@@ -54,17 +54,6 @@ import Cardano.Types.TransactionHash (TransactionHash)
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (liftEither, throwError)
 import Ctl.Internal.Logging (Logger)
-import Ctl.Internal.QueryM.JsonRpc2
-  ( class DecodeOgmios
-  , JsonRpc2Call
-  , JsonRpc2Request
-  , OgmiosDecodeError
-  , decodeOgmios
-  , decodeResult
-  , mkCallType
-  , ogmiosDecodeErrorToError
-  )
-import Ctl.Internal.QueryM.JsonRpc2 as JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.Dispatcher
   ( DispatchError(JsonError)
   , Dispatcher
@@ -89,11 +78,19 @@ import Ctl.Internal.QueryM.Ogmios.JsWebSocket
   , _wsFinalize
   , _wsSend
   )
+import Ctl.Internal.QueryM.Ogmios.JsonRpc2
+  ( JsonRpc2Call
+  , JsonRpc2Request
+  , mkCallType
+  )
+import Ctl.Internal.QueryM.Ogmios.JsonRpc2 as JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.Types
-  ( AdditionalUtxoSet
+  ( class DecodeOgmios
+  , AdditionalUtxoSet
   , ChainTipQR
   , CurrentEpoch
   , DelegationsAndRewardsR
+  , OgmiosDecodeError
   , OgmiosEraSummaries
   , OgmiosProtocolParameters
   , OgmiosSystemStart
@@ -104,6 +101,9 @@ import Ctl.Internal.QueryM.Ogmios.Types
   , aesonNull
   , aesonObject
   , aesonString
+  , decodeOgmios
+  , decodeResult
+  , ogmiosDecodeErrorToError
   , submitSuccessPartialResp
   )
 import Ctl.Internal.QueryM.UniqueId (ListenerId)
@@ -512,10 +512,10 @@ type SubmitTxListenerSet = ListenerSet (TransactionHash /\ CborBytes)
 
 mkAddMessageListener
   :: forall (response :: Type)
-   . JsonRpc2.DecodeOgmios response
+   . DecodeOgmios response
   => Dispatcher
   -> ( ListenerId
-       -> (Either JsonRpc2.OgmiosDecodeError response -> Effect Unit)
+       -> (Either OgmiosDecodeError response -> Effect Unit)
        -> Effect Unit
      )
 mkAddMessageListener dispatcher =
@@ -538,7 +538,7 @@ mkRemoveMessageListener dispatcher pendingRequests =
 -- methods, this can be picked up by a query or cancellation function
 mkListenerSet
   :: forall (request :: Type) (response :: Type)
-   . JsonRpc2.DecodeOgmios response
+   . DecodeOgmios response
   => Dispatcher
   -> PendingRequests
   -> ListenerSet request response

@@ -22,8 +22,8 @@ import Control.Monad.Reader.Trans (asks)
 import Ctl.Internal.Contract.Monad (wrapQueryM)
 import Ctl.Internal.Logging (Logger, mkLogger)
 import Ctl.Internal.QueryM (QueryM)
-import Ctl.Internal.QueryM.JsonRpc2 as JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.JsWebSocket (JsWebSocket)
+import Ctl.Internal.QueryM.Ogmios.JsonRpc2 as JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.Mempool
   ( ListenerSet
   , OgmiosListeners

@@ -7,9 +7,8 @@ import Prelude
 
 import Control.Monad.Error.Class (throwError)
 import Ctl.Internal.QueryM (QueryM)
-import Ctl.Internal.QueryM.JsonRpc2 (pprintOgmiosDecodeError)
 import Ctl.Internal.QueryM.Ogmios (currentEpoch) as Ogmios
-import Ctl.Internal.QueryM.Ogmios.Types (CurrentEpoch)
+import Ctl.Internal.QueryM.Ogmios.Types (CurrentEpoch, pprintOgmiosDecodeError)
 import Data.Either (Either(Right, Left))
 import Effect.Exception (error)
 
