@@ -5,11 +5,6 @@ module Ctl.Internal.QueryM.Ogmios.Mempool
   , MempoolTransaction(MempoolTransaction)
   , HasTxR(HasTxR)
   , MaybeMempoolTransaction(MaybeMempoolTransaction)
-  , acquireMempoolSnapshotAff
-  , mempoolSnapshotHasTxAff
-  , mempoolSnapshotNextTxAff
-  , mempoolSnapshotSizeAndCapacityAff
-  , releaseMempoolAff
   , acquireMempoolSnapshotCall
   , mempoolSnapshotHasTxCall
   , mempoolSnapshotNextTxCall
@@ -20,19 +15,13 @@ module Ctl.Internal.QueryM.Ogmios.Mempool
   , ListenerId
   , mkOgmiosCallType
   , OgmiosWebSocket
-  , SubmitTxListenerSet
   , WebSocket(WebSocket)
   , listeners
   , mkListenerSet
   , defaultMessageListener
-  , mkOgmiosRequestAff
   , mkOgmiosWebSocketAff
   , mkRequestAff
   , underlyingWebSocket
-  , mkOgmiosWebSocketLens
-  , Logger
-  , mkSubmitTxListenerSet
-  , MkServiceWebSocketLens
   ) where
 
 import Prelude
@@ -50,7 +39,6 @@ import Aeson
   , (.:)
   )
 import Cardano.Provider.TxEvaluation (OgmiosTxId)
-import Cardano.Types.CborBytes (CborBytes)
 import Cardano.Types.Slot (Slot)
 import Cardano.Types.TransactionHash (TransactionHash)
 import Control.Alt ((<|>))
@@ -87,18 +75,7 @@ import Ctl.Internal.QueryM.Ogmios.JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.JsonRpc2 as JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.Types
   ( class DecodeOgmios
-  , AdditionalUtxoSet
-  , ChainTipQR
-  , CurrentEpoch
-  , DelegationsAndRewardsR
   , OgmiosDecodeError
-  , OgmiosEraSummaries
-  , OgmiosProtocolParameters
-  , OgmiosSystemStart
-  , OgmiosTxEvaluationR
-  , PoolParametersR
-  , StakePoolsQueryArgument
-  , SubmitTxR
   , aesonNull
   , aesonObject
   , aesonString
@@ -154,40 +131,6 @@ mempoolSnapshotHasTxAff u ogmiosWs logger ms txh =
     (mempoolSnapshotHasTxCall u ms)
     _.mempoolHasTx
     txh
-
-mempoolSnapshotSizeAndCapacityAff
-  :: MkUniqueId
-  -> OgmiosWebSocket
-  -> Logger
-  -> MempoolSnapshotAcquired
-  -> Aff MempoolSizeAndCapacity
-mempoolSnapshotSizeAndCapacityAff u ogmiosWs logger ms =
-  mkOgmiosRequestAff ogmiosWs logger
-    (mempoolSnapshotSizeAndCapacityCall u ms)
-    _.mempoolSizeAndCapacity -- todo: typo
-    unit
-
-releaseMempoolAff
-  :: MkUniqueId
-  -> OgmiosWebSocket
-  -> Logger
-  -> MempoolSnapshotAcquired
-  -> Aff ReleasedMempool
-releaseMempoolAff u ogmiosWs logger ms =
-  mkOgmiosRequestAff ogmiosWs logger (releaseMempoolCall u ms)
-    _.releaseMempool
-    unit
-
-mempoolSnapshotNextTxAff
-  :: MkUniqueId
-  -> OgmiosWebSocket
-  -> Logger
-  -> MempoolSnapshotAcquired
-  -> Aff (Maybe MempoolTransaction)
-mempoolSnapshotNextTxAff u ogmiosWs logger ms = unwrap <$>
-  mkOgmiosRequestAff ogmiosWs logger (mempoolSnapshotNextTxCall u ms)
-    _.mempoolNextTx
-    unit
 
 acquireMempoolSnapshotCall
   :: MkUniqueId -> JsonRpc2Call Unit MempoolSnapshotAcquired
@@ -447,19 +390,7 @@ mkOgmiosWebSocketLens u logger isTxConfirmed = do
     let
       ogmiosWebSocket :: JsWebSocket -> OgmiosWebSocket
       ogmiosWebSocket ws = WebSocket ws
-        { chainTip:
-            mkListenerSet dispatcher pendingRequests
-        , evaluate:
-            mkListenerSet dispatcher pendingRequests
-        , getProtocolParameters:
-            mkListenerSet dispatcher pendingRequests
-        , eraSummaries:
-            mkListenerSet dispatcher pendingRequests
-        , currentEpoch:
-            mkListenerSet dispatcher pendingRequests
-        , systemStart:
-            mkListenerSet dispatcher pendingRequests
-        , acquireMempool:
+        { acquireMempool:
             mkListenerSet dispatcher pendingRequests
         , releaseMempool:
             mkListenerSet dispatcher pendingRequests
@@ -468,12 +399,6 @@ mkOgmiosWebSocketLens u logger isTxConfirmed = do
         , mempoolNextTx:
             mkListenerSet dispatcher pendingRequests
         , mempoolSizeAndCapacity:
-            mkListenerSet dispatcher pendingRequests
-        , submit:
-            mkSubmitTxListenerSet dispatcher pendingSubmitTxRequests
-        , stakePools:
-            mkListenerSet dispatcher pendingRequests
-        , delegationsAndRewards:
             mkListenerSet dispatcher pendingRequests
         }
 
@@ -499,21 +424,11 @@ mkOgmiosWebSocketLens u logger isTxConfirmed = do
 --------------------------------------------------------------------------------
 
 type OgmiosListeners =
-  { chainTip :: ListenerSet Unit ChainTipQR
-  , submit :: SubmitTxListenerSet
-  , evaluate ::
-      ListenerSet (CborBytes /\ AdditionalUtxoSet) OgmiosTxEvaluationR
-  , getProtocolParameters :: ListenerSet Unit OgmiosProtocolParameters
-  , eraSummaries :: ListenerSet Unit OgmiosEraSummaries
-  , currentEpoch :: ListenerSet Unit CurrentEpoch
-  , systemStart :: ListenerSet Unit OgmiosSystemStart
-  , acquireMempool :: ListenerSet Unit MempoolSnapshotAcquired
+  { acquireMempool :: ListenerSet Unit MempoolSnapshotAcquired
   , releaseMempool :: ListenerSet Unit ReleasedMempool
   , mempoolHasTx :: ListenerSet TransactionHash HasTxR
   , mempoolNextTx :: ListenerSet Unit MaybeMempoolTransaction
   , mempoolSizeAndCapacity :: ListenerSet Unit MempoolSizeAndCapacity
-  , stakePools :: ListenerSet StakePoolsQueryArgument PoolParametersR
-  , delegationsAndRewards :: ListenerSet (Array String) DelegationsAndRewardsR
   }
 
 -- convenience type for adding additional query types later
@@ -528,9 +443,6 @@ type ListenerSet (request :: Type) (response :: Type) =
   -- ^ Saves request body until the request is fulfilled. The body is used
   --  to replay requests in case of a WebSocket failure.
   }
-
-type SubmitTxListenerSet = ListenerSet (TransactionHash /\ CborBytes)
-  SubmitTxR
 
 mkAddMessageListener
   :: forall (response :: Type)
@@ -572,19 +484,6 @@ mkListenerSet dispatcher pendingRequests =
   , addRequest:
       \reflection (requestBody /\ _) ->
         Ref.modify_ (Map.insert reflection requestBody) pendingRequests
-  }
-
-mkSubmitTxListenerSet
-  :: Dispatcher -> PendingSubmitTxRequests -> SubmitTxListenerSet
-mkSubmitTxListenerSet dispatcher pendingRequests =
-  { addMessageListener:
-      mkAddMessageListener dispatcher
-  , removeMessageListener:
-      mkRemoveMessageListener dispatcher pendingRequests
-  , addRequest:
-      \reflection (requestBody /\ txHash /\ _) ->
-        Ref.modify_ (Map.insert reflection (requestBody /\ txHash))
-          pendingRequests
   }
 
 -- | Builds an Ogmios request action using `Aff`
