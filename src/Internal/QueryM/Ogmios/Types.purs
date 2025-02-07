@@ -21,7 +21,6 @@ module Ctl.Internal.QueryM.Ogmios.Types
   , ogmiosDecodeErrorToError
   , decodeOgmios
   , class DecodeOgmios
-  , JsonRpc2Response
   , OgmiosDecodeError
       ( ResultDecodingError
       , ClientErrorResponse
@@ -58,6 +57,7 @@ import Aeson
   , fromString
   , getField
   , getFieldOptional
+  , getFieldOptional'
   , isNull
   , printJsonDecodeError
   , stringifyAeson
@@ -1125,7 +1125,7 @@ type JsonRpc2Response =
   , method :: Maybe String
   , result :: Maybe Aeson
   , error :: Maybe Aeson
-  , id :: String
+  , id :: Maybe String
   }
 
 decodeAesonJsonRpc2Response
@@ -1135,7 +1135,7 @@ decodeAesonJsonRpc2Response = aesonObject $ \o -> do
   method <- getFieldOptional o "method"
   result <- getFieldOptional o "result"
   error <- getFieldOptional o "error"
-  id <- getField o "id"
+  id <- getFieldOptional' o "id"
   pure
     { jsonrpc
     , method

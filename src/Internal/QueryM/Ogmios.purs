@@ -137,14 +137,7 @@ ogmiosQueryNoParams
    . DecodeOgmios a
   => String
   -> QueryM (Either OgmiosDecodeError a)
-ogmiosQueryNoParams method = do
-  let
-    body = Aeson.encodeAeson
-      { jsonrpc: "2.0"
-      , id: "http-" <> method
-      , method
-      }
-  handleAffjaxOgmiosResponse <$> ogmiosPostRequest body
+ogmiosQueryNoParams method = do ogmiosQueryParams method {}
 
 ogmiosQueryParams
   :: forall a p
@@ -157,9 +150,8 @@ ogmiosQueryParams method params = do
   let
     body = Aeson.encodeAeson
       { jsonrpc: "2.0"
-      , id: "http-" <> method
       , method
-      , params: params
+      , params
       }
   handleAffjaxOgmiosResponse <$> ogmiosPostRequest body
 
