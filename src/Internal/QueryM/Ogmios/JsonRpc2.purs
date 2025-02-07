@@ -10,17 +10,10 @@ module Ctl.Internal.QueryM.Ogmios.JsonRpc2
 
 import Prelude
 
-import Aeson
-  ( class EncodeAeson
-  , Aeson
-  , JsonDecodeError(TypeMismatch)
-  , caseAesonObject
-  , encodeAeson
-  , getField
-  )
-import Data.Either (Either(Left))
+import Aeson (class EncodeAeson, Aeson, JsonDecodeError, encodeAeson, getField)
+import Ctl.Internal.Service.Helpers (aesonObject)
+import Data.Either (Either)
 import Effect (Effect)
-import Foreign.Object (Object)
 import Record as Record
 
 -- | Structure of all json rpc2.0 websocket requests
@@ -80,10 +73,3 @@ parseJsonRpc2ResponseId
 parseJsonRpc2ResponseId =
   aesonObject $ flip getField "id"
 
--- | Helper for assuming we get an object
-aesonObject
-  :: forall (a :: Type)
-   . (Object Aeson -> Either JsonDecodeError a)
-  -> Aeson
-  -> Either JsonDecodeError a
-aesonObject = caseAesonObject (Left (TypeMismatch "expected object"))
