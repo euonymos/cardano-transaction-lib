@@ -23,7 +23,7 @@ import Ctl.Internal.QueryM.Ogmios.Types
   )
 import Ctl.Internal.Types.StakeValidatorHash (StakeValidatorHash)
 import Data.ByteArray (byteArrayToHex)
-import Data.Either (Either(Right, Left))
+import Data.Either (either)
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(Nothing, Just))
@@ -37,11 +37,10 @@ import Record.Builder (build, merge)
 getStakePools
   :: Maybe (Array PoolPubKeyHash)
   -> QueryM (Map PoolPubKeyHash PoolParameters)
-getStakePools selected = do
-  resp <- Ogmios.poolParameters $ wrap selected
-  case resp of
-    Left err -> throwError $ error $ pprintOgmiosDecodeError err
-    Right val -> pure $ unwrap val
+getStakePools selected =
+  Ogmios.poolParameters (wrap selected) >>= either
+    (throwError <<< error <<< pprintOgmiosDecodeError)
+    (pure <<< unwrap)
 
 getPoolIds :: QueryM (Array PoolPubKeyHash)
 getPoolIds = (Map.toUnfoldableUnordered >>> map fst) <$>
@@ -72,11 +71,10 @@ getPoolsParameters poolPubKeyHashes = do
 
 getValidatorHashDelegationsAndRewards
   :: StakeValidatorHash -> QueryM (Maybe DelegationsAndRewards)
-getValidatorHashDelegationsAndRewards skh = do
-  resp <- Ogmios.delegationsAndRewards [ stringRep ]
-  case resp of
-    Left err -> throwError $ error $ pprintOgmiosDecodeError err
-    Right val -> pure $ Map.lookup byteHex $ unwrap val
+getValidatorHashDelegationsAndRewards skh =
+  Ogmios.delegationsAndRewards [ stringRep ] >>= either
+    (throwError <<< error <<< pprintOgmiosDecodeError)
+    (pure <<< Map.lookup byteHex <<< unwrap)
   where
   stringRep :: String
   stringRep = unsafePartial $ ScriptHash.toBech32Unsafe "script" $ unwrap skh
@@ -87,11 +85,10 @@ getValidatorHashDelegationsAndRewards skh = do
 -- TODO: batched variant
 getPubKeyHashDelegationsAndRewards
   :: StakePubKeyHash -> QueryM (Maybe DelegationsAndRewards)
-getPubKeyHashDelegationsAndRewards pkh = do
-  resp <- Ogmios.delegationsAndRewards [ stringRep ]
-  case resp of
-    Left err -> throwError $ error $ pprintOgmiosDecodeError err
-    Right val -> pure $ Map.lookup byteHex $ unwrap val
+getPubKeyHashDelegationsAndRewards pkh =
+  Ogmios.delegationsAndRewards [ stringRep ] >>= either
+    (throwError <<< error <<< pprintOgmiosDecodeError)
+    (pure <<< Map.lookup byteHex <<< unwrap)
   where
   stringRep :: String
   stringRep = unsafePartial

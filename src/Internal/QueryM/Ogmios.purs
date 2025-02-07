@@ -53,7 +53,7 @@ import Ctl.Internal.QueryM.Ogmios.Types
 import Ctl.Internal.ServerConfig (ServerConfig, mkHttpUrl)
 import Data.Bifunctor (lmap)
 import Data.ByteArray (byteArrayToHex)
-import Data.Either (Either(Right, Left))
+import Data.Either (Either(Right, Left), either)
 import Data.HTTP.Method (Method(POST))
 import Data.Lens (_Right, to, (^?))
 import Data.Maybe (Maybe(Just))
@@ -219,11 +219,9 @@ ogmiosErrorHandler
   => MonadThrow Error m
   => m (Either OgmiosDecodeError a)
   -> m a
-ogmiosErrorHandler fun = do
-  resp <- fun
-  case resp of
-    Left err -> throwError $ error $ pprintOgmiosDecodeError err
-    Right val -> pure val
+ogmiosErrorHandler fun = fun >>= either
+  (throwError <<< error <<< pprintOgmiosDecodeError)
+  pure
 
 ogmiosErrorHandlerWithArg
   :: forall a m b
@@ -232,9 +230,6 @@ ogmiosErrorHandlerWithArg
   => (a -> m (Either OgmiosDecodeError b))
   -> a
   -> m b
-ogmiosErrorHandlerWithArg fun arg = do
-  resp <- fun arg
-  case resp of
-    Left err -> throwError $ error $ pprintOgmiosDecodeError err
-    Right val -> pure val
-
+ogmiosErrorHandlerWithArg fun arg = fun arg >>= either
+  (throwError <<< error <<< pprintOgmiosDecodeError)
+  pure
