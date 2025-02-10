@@ -22,9 +22,8 @@ module Ctl.Internal.QueryM.Ogmios.Types
   , decodeOgmios
   , class DecodeOgmios
   , OgmiosDecodeError
-      ( ResultDecodingError
-      , ClientErrorResponse
-      , InvalidResponse
+      ( ClientErrorResponse
+      , InvalidRpcResponse
       , ErrorResponse
       )
   , OgmiosEraSummaries(OgmiosEraSummaries)
@@ -65,7 +64,10 @@ import Aeson
   , (.:?)
   )
 import Cardano.AsCbor (decodeCbor, encodeCbor)
-import Cardano.Provider.Error (ClientError, pprintClientError)
+import Cardano.Provider.Error
+  ( ClientError(ClientDecodeJsonError)
+  , pprintClientError
+  )
 import Cardano.Provider.TxEvaluation
   ( ExecutionUnits
   , OgmiosTxOut
@@ -1045,10 +1047,8 @@ data OgmiosDecodeError
   = ErrorResponse (Maybe OgmiosError)
   -- Server responded with result, parsing of which failed
   | ClientErrorResponse ClientError
-  -- Server responded with result, parsing of which failed
-  | ResultDecodingError JsonDecodeError
   -- Received JsonRpc2Response was not of the right format.
-  | InvalidResponse JsonDecodeError
+  | InvalidRpcResponse JsonDecodeError
 
 derive instance Generic OgmiosDecodeError _
 
@@ -1060,9 +1060,7 @@ pprintOgmiosDecodeError (ErrorResponse err) = "Ogmios responded with error: " <>
   maybe "<Actually no response>" pprintOgmiosError err
 pprintOgmiosDecodeError (ClientErrorResponse err) =
   "Ogmios responded with error: " <> pprintClientError err
-pprintOgmiosDecodeError (ResultDecodingError err) =
-  "Failed to parse the result: " <> printJsonDecodeError err
-pprintOgmiosDecodeError (InvalidResponse err) =
+pprintOgmiosDecodeError (InvalidRpcResponse err) =
   "Ogmios response was not of the right format: " <> printJsonDecodeError err
 
 ogmiosDecodeErrorToError :: OgmiosDecodeError -> Error
@@ -1084,20 +1082,22 @@ makeDecodeOgmios
   -> Aeson
   -> Either OgmiosDecodeError o
 makeDecodeOgmios decoders aeson = do
-  json <- lmap InvalidResponse $ decodeAesonJsonRpc2Response aeson
+  json <- lmap InvalidRpcResponse $ decodeAesonJsonRpc2Response aeson
   let merr = _.parseError <$> theseLeft decoders <*> json.error
   let mres = _.parseResult <$> theseRight decoders <*> json.result
   case (mres /\ merr) of
     -- Expected result, got it
     Just (Right x) /\ _ -> pure x
     -- Expected result, got it in a wrong format
-    Just (Left err) /\ _ -> Left $ ResultDecodingError err
+    Just (Left err) /\ _ -> Left $ ClientErrorResponse $ ClientDecodeJsonError
+      (stringifyAeson aeson)
+      err
     -- Got an expected error
     _ /\ Just (Right x) -> pure x
     -- Got an unexpected error
     _ -> do
       err :: Maybe OgmiosError <- sequence $
-        lmap InvalidResponse <<< decodeAeson <$> json.error
+        lmap InvalidRpcResponse <<< decodeAeson <$> json.error
       Left $ ErrorResponse err
 
 -- | Decode "result" field of ogmios response.
