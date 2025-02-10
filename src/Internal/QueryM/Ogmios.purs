@@ -21,7 +21,7 @@ import Affjax.ResponseFormat (string) as Affjax.ResponseFormat
 import Affjax.StatusCode (StatusCode(StatusCode))
 import Affjax.StatusCode as Affjax.StatusCode
 import Cardano.Provider.Error
-  ( ClientError(ClientHttpError, ClientHttpResponseError)
+  ( ClientError(ClientHttpError, ClientHttpResponseError, ClientDecodeJsonError)
   , ServiceError(ServiceOtherError)
   )
 import Cardano.Provider.TxEvaluation as Provider
@@ -33,13 +33,14 @@ import Control.Monad.Error.Class (class MonadThrow, throwError)
 import Control.Monad.Reader.Class (asks)
 import Ctl.Internal.Affjax (request) as Affjax
 import Ctl.Internal.QueryM (QueryM)
+import Ctl.Internal.QueryM.HttpUtils (handleAffjaxResponseGeneric)
 import Ctl.Internal.QueryM.Ogmios.Types
   ( class DecodeOgmios
   , AdditionalUtxoSet
   , ChainTipQR(CtChainPoint, CtChainOrigin)
   , CurrentEpoch
   , DelegationsAndRewardsR
-  , OgmiosDecodeError(ResultDecodingError, ClientErrorResponse)
+  , OgmiosDecodeError(ClientErrorResponse)
   , OgmiosEraSummaries
   , OgmiosProtocolParameters
   , OgmiosSystemStart
@@ -137,7 +138,7 @@ ogmiosQueryNoParams
    . DecodeOgmios a
   => String
   -> QueryM (Either OgmiosDecodeError a)
-ogmiosQueryNoParams method = do ogmiosQueryParams method {}
+ogmiosQueryNoParams = flip ogmiosQueryParams {}
 
 ogmiosQueryParams
   :: forall a p
@@ -201,17 +202,16 @@ handleAffjaxOgmiosResponse
    . DecodeOgmios result
   => Either Affjax.Error (Affjax.Response String)
   -> Either OgmiosDecodeError result
-handleAffjaxOgmiosResponse (Left affjaxError) =
-  Left (ClientErrorResponse $ ClientHttpError affjaxError)
-handleAffjaxOgmiosResponse
-  (Right { status: Affjax.StatusCode.StatusCode statusCode, body })
-  | statusCode < 200 || statusCode > 299 =
-      Left $ ClientErrorResponse $ ClientHttpResponseError (wrap statusCode) $
-        ServiceOtherError body
-  | otherwise = do
-      aeson <- lmap ResultDecodingError
-        $ parseJsonStringToAeson body
-      decodeOgmios aeson
+handleAffjaxOgmiosResponse =
+  handleAffjaxResponseGeneric
+    (ClientErrorResponse <<< ClientHttpError)
+    ( \statusCode body -> ClientErrorResponse $ ClientHttpResponseError
+        (wrap statusCode)
+        (ServiceOtherError body)
+    )
+    (\body -> ClientErrorResponse <<< ClientDecodeJsonError body)
+    parseJsonStringToAeson
+    decodeOgmios
 
 ogmiosErrorHandler
   :: forall a m

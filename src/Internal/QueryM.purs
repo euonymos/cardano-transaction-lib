@@ -30,6 +30,7 @@ import Control.Monad.Rec.Class (class MonadRec)
 import Control.Parallel (class Parallel, parallel, sequential)
 import Control.Plus (class Plus)
 import Ctl.Internal.Helpers (logWithLevel)
+import Ctl.Internal.QueryM.HttpUtils (handleAffjaxResponseGeneric)
 import Ctl.Internal.QueryM.Ogmios.QueryEnv (QueryRuntime)
 import Ctl.Internal.ServerConfig (ServerConfig)
 import Data.Bifunctor (lmap)
@@ -128,27 +129,17 @@ instance Parallel (QueryMT ParAff) (QueryMT Aff) where
   sequential :: QueryMT ParAff ~> QueryMT Aff
   sequential = wrap <<< sequential <<< unwrap
 
---------------------------------------------------------------------------------
--- Affjax
---------------------------------------------------------------------------------
-
--- Checks response status code and returns `ClientError` in case of failure,
--- otherwise attempts to decode the result.
---
--- This function solves the problem described there:
--- https://github.com/eviefp/purescript-affjax-errors
 handleAffjaxResponse
   :: forall (result :: Type)
    . DecodeAeson result
   => Either Affjax.Error (Affjax.Response String)
   -> Either ClientError result
-handleAffjaxResponse (Left affjaxError) =
-  Left (ClientHttpError affjaxError)
-handleAffjaxResponse
-  (Right { status: Affjax.StatusCode.StatusCode statusCode, body })
-  | statusCode < 200 || statusCode > 299 =
-      Left $ ClientHttpResponseError (wrap statusCode) $ ServiceOtherError body
-  | otherwise =
-      body # lmap (ClientDecodeJsonError body)
-        <<< (decodeAeson <=< parseJsonStringToAeson)
-
+handleAffjaxResponse =
+  handleAffjaxResponseGeneric
+    ClientHttpError
+    ( \statusCode body -> ClientHttpResponseError (wrap statusCode)
+        (ServiceOtherError body)
+    )
+    ClientDecodeJsonError
+    (decodeAeson <=< parseJsonStringToAeson)
+    pure
