@@ -14,7 +14,6 @@ import Prelude
 
 import Aeson (class DecodeAeson, decodeAeson, parseJsonStringToAeson)
 import Affjax (Error, Response) as Affjax
-import Affjax.StatusCode as Affjax.StatusCode
 import Cardano.Provider.Error
   ( ClientError(ClientHttpError, ClientHttpResponseError, ClientDecodeJsonError)
   , ServiceError(ServiceOtherError)
@@ -33,8 +32,7 @@ import Ctl.Internal.Helpers (logWithLevel)
 import Ctl.Internal.QueryM.HttpUtils (handleAffjaxResponseGeneric)
 import Ctl.Internal.QueryM.Ogmios.QueryEnv (QueryRuntime)
 import Ctl.Internal.ServerConfig (ServerConfig)
-import Data.Bifunctor (lmap)
-import Data.Either (Either(Left, Right))
+import Data.Either (Either)
 import Data.Log.Level (LogLevel)
 import Data.Log.Message (Message)
 import Data.Maybe (Maybe, fromMaybe)

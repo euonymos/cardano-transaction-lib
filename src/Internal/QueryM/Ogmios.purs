@@ -19,7 +19,6 @@ import Affjax.RequestBody as Affjax.RequestBody
 import Affjax.RequestHeader as Affjax.RequestHeader
 import Affjax.ResponseFormat (string) as Affjax.ResponseFormat
 import Affjax.StatusCode (StatusCode(StatusCode))
-import Affjax.StatusCode as Affjax.StatusCode
 import Cardano.Provider.Error
   ( ClientError(ClientHttpError, ClientHttpResponseError, ClientDecodeJsonError)
   , ServiceError(ServiceOtherError)
@@ -52,9 +51,8 @@ import Ctl.Internal.QueryM.Ogmios.Types
   , pprintOgmiosDecodeError
   )
 import Ctl.Internal.ServerConfig (ServerConfig, mkHttpUrl)
-import Data.Bifunctor (lmap)
 import Data.ByteArray (byteArrayToHex)
-import Data.Either (Either(Right, Left), either)
+import Data.Either (Either(Left), either)
 import Data.HTTP.Method (Method(POST))
 import Data.Lens (_Right, to, (^?))
 import Data.Maybe (Maybe(Just))

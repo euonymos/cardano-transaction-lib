@@ -31,12 +31,9 @@ module Ctl.Internal.QueryM.Ogmios.Types
   , SubmitTxR(SubmitTxSuccess, SubmitFail)
   , StakePoolsQueryArgument(StakePoolsQueryArgument)
   , OgmiosTxEvaluationR(OgmiosTxEvaluationR)
-  , aesonObject
   , submitSuccessPartialResp
   , parseIpv6String
   , rationalToSubcoin
-  , aesonNull
-  , aesonString
   ) where
 
 import Prelude
@@ -46,9 +43,6 @@ import Aeson
   , class EncodeAeson
   , Aeson
   , JsonDecodeError(TypeMismatch, MissingValue, AtKey)
-  , caseAesonArray
-  , caseAesonNull
-  , caseAesonObject
   , caseAesonString
   , decodeAeson
   , encodeAeson
@@ -141,6 +135,7 @@ import Cardano.Types.Value (Value, getMultiAsset, valueToCoin)
 import Control.Alt ((<|>))
 import Control.Alternative (guard)
 import Ctl.Internal.Helpers (encodeMap, showWithParens)
+import Ctl.Internal.Service.Helpers (aesonArray, aesonObject, aesonString)
 import Ctl.Internal.Types.ProtocolParameters
   ( ProtocolParameters(ProtocolParameters)
   )
@@ -989,37 +984,6 @@ instance EncodeAeson AdditionalUtxoSet where
       mapKeys f = (Map.toUnfoldable :: Map k1 a -> Array (k1 /\ a)) >>> foldl
         (\m' (k /\ v) -> Map.insert (f k) v m')
         Map.empty
-
--- helper for assuming we get an object
-aesonObject
-  :: forall (a :: Type)
-   . (Object Aeson -> Either JsonDecodeError a)
-  -> Aeson
-  -> Either JsonDecodeError a
-aesonObject = caseAesonObject (Left (TypeMismatch "Expected Object"))
-
--- helper for assuming we get an array
-aesonArray
-  :: forall (a :: Type)
-   . (Array Aeson -> Either JsonDecodeError a)
-  -> Aeson
-  -> Either JsonDecodeError a
-aesonArray = caseAesonArray (Left (TypeMismatch "Expected Array"))
-
--- Helper that decodes a string
-aesonString
-  :: forall (a :: Type)
-   . (String -> Either JsonDecodeError a)
-  -> Aeson
-  -> Either JsonDecodeError a
-aesonString = caseAesonString (Left (TypeMismatch "Expected String"))
-
--- Helper that decodes a null
-aesonNull
-  :: forall (a :: Type)
-   . Aeson
-  -> Either JsonDecodeError Unit
-aesonNull = caseAesonNull (Left (TypeMismatch "Expected Null")) pure
 
 -- Decode utilities
 

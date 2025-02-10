@@ -76,14 +76,12 @@ import Ctl.Internal.QueryM.Ogmios.JsonRpc2 as JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.Types
   ( class DecodeOgmios
   , OgmiosDecodeError
-  , aesonNull
-  , aesonObject
-  , aesonString
   , decodeOgmios
   , decodeResult
   , ogmiosDecodeErrorToError
   , submitSuccessPartialResp
   )
+import Ctl.Internal.Service.Helpers (aesonNull, aesonObject, aesonString)
 import Data.Argonaut.Encode.Encoders as Argonaut
 import Data.Bifunctor (lmap)
 import Data.Either (Either(Left, Right), either, isRight)
