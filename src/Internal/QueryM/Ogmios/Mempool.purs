@@ -43,7 +43,7 @@ import Cardano.Types.Slot (Slot)
 import Cardano.Types.TransactionHash (TransactionHash)
 import Control.Alt ((<|>))
 import Control.Monad.Error.Class (liftEither, throwError)
-import Ctl.Internal.QueryM.Ogmios.Dispatcher
+import Ctl.Internal.QueryM.Ogmios.Mempool.Dispatcher
   ( DispatchError(JsonError)
   , Dispatcher
   , GenericPendingRequests
@@ -55,7 +55,7 @@ import Ctl.Internal.QueryM.Ogmios.Dispatcher
   , newDispatcher
   , newPendingRequests
   )
-import Ctl.Internal.QueryM.Ogmios.JsWebSocket
+import Ctl.Internal.QueryM.Ogmios.Mempool.JsWebSocket
   ( JsWebSocket
   , Url
   , _mkWebSocket
@@ -67,12 +67,12 @@ import Ctl.Internal.QueryM.Ogmios.JsWebSocket
   , _wsFinalize
   , _wsSend
   )
-import Ctl.Internal.QueryM.Ogmios.JsonRpc2
+import Ctl.Internal.QueryM.Ogmios.Mempool.JsonRpc2
   ( JsonRpc2Call
   , JsonRpc2Request
   , mkCallType
   )
-import Ctl.Internal.QueryM.Ogmios.JsonRpc2 as JsonRpc2
+import Ctl.Internal.QueryM.Ogmios.Mempool.JsonRpc2 as JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.Types
   ( class DecodeOgmios
   , OgmiosDecodeError

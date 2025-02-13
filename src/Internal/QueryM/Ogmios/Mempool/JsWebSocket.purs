@@ -1,4 +1,4 @@
-module Ctl.Internal.QueryM.Ogmios.JsWebSocket
+module Ctl.Internal.QueryM.Ogmios.Mempool.JsWebSocket
   ( JsWebSocket
   , ListenerRef
   , Url

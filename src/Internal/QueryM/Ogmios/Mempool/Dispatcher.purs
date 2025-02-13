@@ -1,4 +1,4 @@
-module Ctl.Internal.QueryM.Ogmios.Dispatcher
+module Ctl.Internal.QueryM.Ogmios.Mempool.Dispatcher
   ( DispatchError(JsonError, FaultError, ListenerCancelled)
   , Dispatcher
   , GenericPendingRequests
@@ -17,7 +17,7 @@ import Prelude
 
 import Aeson (Aeson, JsonDecodeError, stringifyAeson)
 import Cardano.Types.TransactionHash (TransactionHash)
-import Ctl.Internal.QueryM.Ogmios.JsonRpc2 (parseJsonRpc2ResponseId)
+import Ctl.Internal.QueryM.Ogmios.Mempool.JsonRpc2 (parseJsonRpc2ResponseId)
 import Data.Either (Either(Left, Right))
 import Data.Map (Map)
 import Data.Map (empty, lookup) as Map

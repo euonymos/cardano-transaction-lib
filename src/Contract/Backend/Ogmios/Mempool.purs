@@ -28,8 +28,6 @@ import Control.Monad.Error.Class
 import Control.Monad.Reader.Class (class MonadAsk)
 import Control.Monad.Reader.Trans (ReaderT(ReaderT), asks)
 import Ctl.Internal.Logging (Logger, mkLogger)
-import Ctl.Internal.QueryM.Ogmios.JsWebSocket (JsWebSocket)
-import Ctl.Internal.QueryM.Ogmios.JsonRpc2 as JsonRpc2
 import Ctl.Internal.QueryM.Ogmios.Mempool
   ( ListenerSet
   , OgmiosListeners
@@ -48,6 +46,8 @@ import Ctl.Internal.QueryM.Ogmios.Mempool
   , MempoolSnapshotAcquired
   , MempoolTransaction(MempoolTransaction)
   ) as Ogmios
+import Ctl.Internal.QueryM.Ogmios.Mempool.JsWebSocket (JsWebSocket)
+import Ctl.Internal.QueryM.Ogmios.Mempool.JsonRpc2 as JsonRpc2
 import Data.Array as Array
 import Data.ByteArray (hexToByteArray)
 import Data.List (List(Cons))
