@@ -56,20 +56,11 @@ import Ctl.Internal.Contract.ProviderBackend
 import Ctl.Internal.Helpers (filterMapWithKeyM, liftM, logWithLevel)
 import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
 import Ctl.Internal.QueryM (QueryEnv, QueryM)
-import Ctl.Internal.QueryM.Kupo (isTxConfirmedAff)
 import Ctl.Internal.QueryM.Ogmios (getProtocolParameters, getSystemStartTime)
-import Ctl.Internal.QueryM.Ogmios.JsWebSocket (_wsClose, _wsFinalize)
-import Ctl.Internal.QueryM.Ogmios.Mempool
-  ( WebSocket
-  , mkOgmiosWebSocketAff
-  , underlyingWebSocket
-  )
 import Ctl.Internal.QueryM.Ogmios.Types
   ( OgmiosDecodeError
   , pprintOgmiosDecodeError
   )
-import Ctl.Internal.QueryM.UniqueId (uniqueId)
-import Ctl.Internal.ServerConfig (mkWsUrl)
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM
   , runBlockfrostServiceM
@@ -81,7 +72,7 @@ import Ctl.Internal.Types.UsedTxOuts (UsedTxOuts, isTxOutRefUsed, newUsedTxOuts)
 import Ctl.Internal.Wallet (Wallet(GenericCip30))
 import Ctl.Internal.Wallet.Spec (WalletSpec, mkWalletBySpec)
 import Data.Bifunctor (lmap)
-import Data.Either (Either(Left, Right), isRight)
+import Data.Either (Either(Right, Left))
 import Data.Log.Level (LogLevel)
 import Data.Log.Message (Message)
 import Data.Maybe (Maybe(Just, Nothing), fromMaybe)
@@ -89,8 +80,7 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Time.Duration (Milliseconds, Seconds)
-import Data.Traversable (for_, traverse, traverse_)
-import Effect (Effect)
+import Data.Traversable (for_, traverse)
 import Effect.Aff (Aff, ParAff, attempt, error, finally, supervise)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -266,7 +256,7 @@ mkContractEnv params = do
     }
 
 buildBackend :: Logger -> ProviderBackendParams -> Aff ProviderBackend
-buildBackend logger = case _ of
+buildBackend _ = case _ of
   CtlBackendParams ctlParams blockfrostParams ->
     flip CtlBackend blockfrostParams <$> buildCtlBackend ctlParams
   BlockfrostBackendParams blockfrostParams ctlParams ->
@@ -274,14 +264,8 @@ buildBackend logger = case _ of
   where
   buildCtlBackend :: CtlBackendParams -> Aff CtlBackend
   buildCtlBackend { ogmiosConfig, kupoConfig } = do
-    let isTxConfirmed = map isRight <<< isTxConfirmedAff kupoConfig
-    ogmiosWs <- mkOgmiosWebSocketAff uniqueId isTxConfirmed logger
-      (mkWsUrl ogmiosConfig)
     pure
-      { ogmios:
-          { config: ogmiosConfig
-          , ws: ogmiosWs
-          }
+      { ogmiosConfig
       , kupoConfig
       }
 
@@ -366,15 +350,7 @@ walletNetworkCheck envNetworkId =
 -- | Finalizes a `Contract` environment.
 -- | Closes the connections in `ContractEnv`, effectively making it unusable.
 stopContractEnv :: ContractEnv -> Aff Unit
-stopContractEnv { backend } =
-  liftEffect $ traverse_ stopCtlRuntime (getCtlBackend backend)
-  where
-  stopCtlRuntime :: CtlBackend -> Effect Unit
-  stopCtlRuntime { ogmios } =
-    stopWebSocket ogmios.ws
-
-  stopWebSocket :: forall (a :: Type). WebSocket a -> Effect Unit
-  stopWebSocket = ((*>) <$> _wsFinalize <*> _wsClose) <<< underlyingWebSocket
+stopContractEnv _ = pure unit
 
 -- | Constructs and finalizes a contract environment that is usable inside a
 -- | bracket callback.
@@ -482,14 +458,11 @@ mkQueryEnv
   :: forall (rest :: Row Type). LogParams rest -> CtlBackend -> QueryEnv
 mkQueryEnv params ctlBackend =
   { config:
-      { ogmiosConfig: ctlBackend.ogmios.config
+      { ogmiosConfig: ctlBackend.ogmiosConfig
       , kupoConfig: ctlBackend.kupoConfig
       , logLevel: params.logLevel
       , customLogger: params.customLogger
       , suppressLogs: params.suppressLogs
-      }
-  , runtime:
-      { ogmiosWs: ctlBackend.ogmios.ws
       }
   }
 

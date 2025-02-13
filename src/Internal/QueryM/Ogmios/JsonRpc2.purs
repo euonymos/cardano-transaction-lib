@@ -16,6 +16,9 @@ import Data.Either (Either)
 import Effect (Effect)
 import Record as Record
 
+-- | Creates a unique id prefixed by its argument
+foreign import uniqueId :: String -> Effect String
+
 -- | Structure of all json rpc2.0 websocket requests
 -- described in:  https://ogmios.dev/getting-started/basics/
 type JsonRpc2Request (a :: Type) =
@@ -28,13 +31,12 @@ type JsonRpc2Request (a :: Type) =
 -- | Convenience helper function for creating `JsonRpc2Request a` objects
 mkJsonRpc2Request
   :: forall (a :: Type)
-   . (String -> Effect String)
-  -> { jsonrpc :: String }
+   . { jsonrpc :: String }
   -> { method :: String
      , params :: a
      }
   -> Effect (JsonRpc2Request a)
-mkJsonRpc2Request uniqueId service method = do
+mkJsonRpc2Request service method = do
   id <- uniqueId $ method.method <> "-"
   pure
     $ Record.merge { id }
@@ -50,12 +52,11 @@ newtype JsonRpc2Call (i :: Type) (o :: Type) = JsonRpc2Call
 mkCallType
   :: forall (a :: Type) (i :: Type) (o :: Type)
    . EncodeAeson (JsonRpc2Request a)
-  => (String -> Effect String)
-  -> { jsonrpc :: String }
+  => { jsonrpc :: String }
   -> { method :: String, params :: i -> a }
   -> JsonRpc2Call i o
-mkCallType uniqueId service { method, params } = JsonRpc2Call \i -> do
-  req <- mkJsonRpc2Request uniqueId service { method, params: params i }
+mkCallType service { method, params } = JsonRpc2Call \i -> do
+  req <- mkJsonRpc2Request service { method, params: params i }
   pure { body: encodeAeson req, id: req.id }
 
 -- | Create a JsonRpc2 request body and id

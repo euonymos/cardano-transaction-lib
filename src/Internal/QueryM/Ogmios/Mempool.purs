@@ -102,7 +102,6 @@ import Effect.Exception (Error, error)
 import Effect.Ref as Ref
 
 type ListenerId = String
-type MkUniqueId = (String -> Effect String)
 
 type Logger = LogLevel -> String -> Effect Unit
 
@@ -111,68 +110,63 @@ type Logger = LogLevel -> String -> Effect Unit
 --------------------------------------------------------------------------------
 
 acquireMempoolSnapshotAff
-  :: MkUniqueId -> OgmiosWebSocket -> Logger -> Aff MempoolSnapshotAcquired
-acquireMempoolSnapshotAff u ogmiosWs logger =
-  mkOgmiosRequestAff ogmiosWs logger (acquireMempoolSnapshotCall u)
+  :: OgmiosWebSocket -> Logger -> Aff MempoolSnapshotAcquired
+acquireMempoolSnapshotAff ogmiosWs logger =
+  mkOgmiosRequestAff ogmiosWs logger acquireMempoolSnapshotCall
     _.acquireMempool
     unit
 
 mempoolSnapshotHasTxAff
-  :: MkUniqueId
-  -> OgmiosWebSocket
+  :: OgmiosWebSocket
   -> Logger
   -> MempoolSnapshotAcquired
   -> TransactionHash
   -> Aff Boolean
-mempoolSnapshotHasTxAff u ogmiosWs logger ms txh =
+mempoolSnapshotHasTxAff ogmiosWs logger ms txh =
   unwrap <$> mkOgmiosRequestAff ogmiosWs logger
-    (mempoolSnapshotHasTxCall u ms)
+    (mempoolSnapshotHasTxCall ms)
     _.mempoolHasTx
     txh
 
 acquireMempoolSnapshotCall
-  :: MkUniqueId -> JsonRpc2Call Unit MempoolSnapshotAcquired
-acquireMempoolSnapshotCall u =
-  mkOgmiosCallTypeNoArgs u "acquireMempool"
+  :: JsonRpc2Call Unit MempoolSnapshotAcquired
+acquireMempoolSnapshotCall =
+  mkOgmiosCallTypeNoArgs "acquireMempool"
 
 mempoolSnapshotHasTxCall
-  :: MkUniqueId
-  -> MempoolSnapshotAcquired
+  :: MempoolSnapshotAcquired
   -> JsonRpc2Call TransactionHash HasTxR
-mempoolSnapshotHasTxCall u _ = mkOgmiosCallType u
+mempoolSnapshotHasTxCall _ = mkOgmiosCallType
   { method: "hasTransaction"
   , params: { id: _ }
   }
 
 mempoolSnapshotNextTxCall
-  :: MkUniqueId
-  -> MempoolSnapshotAcquired
+  :: MempoolSnapshotAcquired
   -> JsonRpc2Call Unit MaybeMempoolTransaction
-mempoolSnapshotNextTxCall u _ = mkOgmiosCallType u
+mempoolSnapshotNextTxCall _ = mkOgmiosCallType
   { method: "nextTransaction"
   , params: const { fields: "all" }
   }
 
 mempoolSnapshotSizeAndCapacityCall
-  :: MkUniqueId
-  -> MempoolSnapshotAcquired
+  :: MempoolSnapshotAcquired
   -> JsonRpc2Call Unit MempoolSizeAndCapacity
-mempoolSnapshotSizeAndCapacityCall u _ =
-  mkOgmiosCallTypeNoArgs u "sizeOfMempool"
+mempoolSnapshotSizeAndCapacityCall _ =
+  mkOgmiosCallTypeNoArgs "sizeOfMempool"
 
 releaseMempoolCall
-  :: MkUniqueId -> MempoolSnapshotAcquired -> JsonRpc2Call Unit ReleasedMempool
-releaseMempoolCall u _ =
-  mkOgmiosCallTypeNoArgs u "releaseMempool"
+  :: MempoolSnapshotAcquired -> JsonRpc2Call Unit ReleasedMempool
+releaseMempoolCall _ =
+  mkOgmiosCallTypeNoArgs "releaseMempool"
 
 withMempoolSnapshot
-  :: MkUniqueId
-  -> OgmiosWebSocket
+  :: OgmiosWebSocket
   -> Logger
   -> (Maybe MempoolSnapshotAcquired -> Aff Unit)
   -> Effect Unit
-withMempoolSnapshot u ogmiosWs logger cont =
-  flip runAff_ (acquireMempoolSnapshotAff u ogmiosWs logger) $ case _ of
+withMempoolSnapshot ogmiosWs logger cont =
+  flip runAff_ (acquireMempoolSnapshotAff ogmiosWs logger) $ case _ of
     Left err -> do
       logger Error $
         "Failed to acquire a mempool snapshot: Error: " <> show err
@@ -187,21 +181,19 @@ withMempoolSnapshot u ogmiosWs logger cont =
 mkOgmiosCallTypeNoArgs
   :: forall (o :: Type)
    . DecodeOgmios o
-  => MkUniqueId
-  -> String
+  => String
   -> JsonRpc2Call Unit o
-mkOgmiosCallTypeNoArgs u method =
-  mkOgmiosCallType u { method, params: const {} }
+mkOgmiosCallTypeNoArgs method =
+  mkOgmiosCallType { method, params: const {} }
 
 mkOgmiosCallType
   :: forall (a :: Type) (i :: Type) (o :: Type)
    . EncodeAeson (JsonRpc2Request a)
   => DecodeOgmios o
-  => MkUniqueId
-  -> { method :: String, params :: i -> a }
+  => { method :: String, params :: i -> a }
   -> JsonRpc2Call i o
-mkOgmiosCallType u =
-  mkCallType u { jsonrpc: "2.0" }
+mkOgmiosCallType =
+  mkCallType { jsonrpc: "2.0" }
 
 --------------------------------------------------------------------------------
 -- WebSocket
@@ -232,13 +224,12 @@ listeners (WebSocket _ ls) = ls
 type IsTxConfirmed = TransactionHash -> Aff Boolean
 
 mkOgmiosWebSocketAff
-  :: MkUniqueId
-  -> IsTxConfirmed
+  :: IsTxConfirmed
   -> Logger
   -> String
   -> Aff OgmiosWebSocket
-mkOgmiosWebSocketAff u isTxConfirmed logger serverUrl = do
-  lens <- liftEffect $ mkOgmiosWebSocketLens u logger isTxConfirmed
+mkOgmiosWebSocketAff isTxConfirmed logger serverUrl = do
+  lens <- liftEffect $ mkOgmiosWebSocketLens logger isTxConfirmed
   makeAff $ mkServiceWebSocket lens serverUrl
 
 mkServiceWebSocket
@@ -296,8 +287,7 @@ mkServiceWebSocket lens url continue = do
 -- | been added to the mempool or has been included in a block before retrying
 -- | the request.
 resendPendingSubmitRequests
-  :: MkUniqueId
-  -> OgmiosWebSocket
+  :: OgmiosWebSocket
   -> IsTxConfirmed
   -> Logger
   -> (RequestBody -> Effect Unit)
@@ -305,7 +295,6 @@ resendPendingSubmitRequests
   -> PendingSubmitTxRequests
   -> Effect Unit
 resendPendingSubmitRequests
-  u
   ogmiosWs
   isTxConfirmed
   logger
@@ -316,7 +305,7 @@ resendPendingSubmitRequests
   unless (Map.isEmpty submitTxPendingRequests) do
     -- Acquiring a mempool snapshot should never fail and,
     -- after ws reconnection, should be instantaneous.
-    withMempoolSnapshot u ogmiosWs logger case _ of
+    withMempoolSnapshot ogmiosWs logger case _ of
       Nothing ->
         liftEffect $ traverse_ (sendRequest <<< fst) submitTxPendingRequests
       Just ms -> do
@@ -340,7 +329,7 @@ resendPendingSubmitRequests
     -> Aff Unit
   handlePendingSubmitRequest ms listenerId requestBody txHash = do
     -- Check if the transaction was added to the mempool:
-    txInMempool <- mempoolSnapshotHasTxAff u ogmiosWs logger ms txHash
+    txInMempool <- mempoolSnapshotHasTxAff ogmiosWs logger ms txHash
     log "Tx in the mempool" txInMempool txHash
     retrySubmitTx <-
       if txInMempool then pure false
@@ -376,11 +365,10 @@ type MkServiceWebSocketLens (listeners :: Type) =
   }
 
 mkOgmiosWebSocketLens
-  :: MkUniqueId
-  -> Logger
+  :: Logger
   -> IsTxConfirmed
   -> Effect (MkServiceWebSocketLens OgmiosListeners)
-mkOgmiosWebSocketLens u logger isTxConfirmed = do
+mkOgmiosWebSocketLens logger isTxConfirmed = do
   dispatcher <- newDispatcher
   pendingRequests <- newPendingRequests
   pendingSubmitTxRequests <- newPendingRequests
@@ -404,7 +392,7 @@ mkOgmiosWebSocketLens u logger isTxConfirmed = do
       resendPendingRequests ws = do
         let sendRequest = _wsSend ws (logger Debug)
         Ref.read pendingRequests >>= traverse_ sendRequest
-        resendPendingSubmitRequests u (ogmiosWebSocket ws) isTxConfirmed
+        resendPendingSubmitRequests (ogmiosWebSocket ws) isTxConfirmed
           logger
           sendRequest
           dispatcher
@@ -676,3 +664,4 @@ instance DecodeAeson ReleasedMempool where
 
 instance DecodeOgmios ReleasedMempool where
   decodeOgmios = decodeResult decodeAeson
+

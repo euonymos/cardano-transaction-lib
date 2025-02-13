@@ -30,7 +30,6 @@ import Control.Parallel (class Parallel, parallel, sequential)
 import Control.Plus (class Plus)
 import Ctl.Internal.Helpers (logWithLevel)
 import Ctl.Internal.QueryM.HttpUtils (handleAffjaxResponseGeneric)
-import Ctl.Internal.QueryM.Ogmios.QueryEnv (QueryRuntime)
 import Ctl.Internal.ServerConfig (ServerConfig)
 import Data.Either (Either)
 import Data.Log.Level (LogLevel)
@@ -72,7 +71,6 @@ type QueryConfig =
 -- | `QueryEnv` contains everything needed for `QueryM` to run.
 type QueryEnv =
   { config :: QueryConfig
-  , runtime :: QueryRuntime
   }
 
 type QueryM = QueryMT Aff
