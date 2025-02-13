@@ -42,7 +42,7 @@ mkWebsocket = do
   ogmiosConfig <- case config.backend of
     CtlBackend ctlBackend _ -> pure ctlBackend.ogmiosConfig
     _ -> throwError $ error "Ogmios backend not supported"
-  liftAff $ mkOgmiosWebSocketAff (const $ pure true)
+  liftAff $ mkOgmiosWebSocketAff
     (mkLogger config.logLevel config.customLogger)
     (mkWsUrl ogmiosConfig)
 
