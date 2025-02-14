@@ -30,7 +30,10 @@ import Aeson
   ( class DecodeAeson
   , class EncodeAeson
   , Aeson
-  , JsonDecodeError(UnexpectedValue, TypeMismatch)
+  , JsonDecodeError(TypeMismatch, UnexpectedValue)
+  , caseAesonNull
+  , caseAesonObject
+  , caseAesonString
   , decodeAeson
   , getField
   , parseJsonStringToAeson
@@ -78,7 +81,6 @@ import Ctl.Internal.QueryM.Ogmios.Types
   , decodeResult
   , ogmiosDecodeErrorToError
   )
-import Ctl.Internal.Service.Helpers (aesonNull, aesonObject, aesonString)
 import Data.Argonaut.Encode.Encoders as Argonaut
 import Data.Bifunctor (lmap)
 import Data.Either (Either(Left, Right), either, isRight)
@@ -95,6 +97,7 @@ import Effect.Aff (Aff, Canceler(Canceler), makeAff)
 import Effect.Class (liftEffect)
 import Effect.Exception (Error, error)
 import Effect.Ref as Ref
+import Foreign.Object (Object)
 
 type ListenerId = String
 
@@ -375,9 +378,6 @@ mkRequestAff listeners' webSocket logger jsonRpc2Call getLs input = do
       respLs.addRequest id (sBody /\ input)
       _wsSend webSocket (logger Debug) sBody
       -- Uncomment this code fragment to test `SubmitTx` request resend logic:
-      -- let method = aesonObject (flip getFieldOptional "methodname") body
-      -- when (method == Right (Just "SubmitTx")) do
-      --   _wsReconnect webSocket
       pure $ Canceler $ \err -> do
         liftEffect $ respLs.removeMessageListener id
         liftEffect $ throwError $ err
@@ -497,7 +497,7 @@ instance DecodeAeson MaybeMempoolTransaction where
           pure $ Just $ MempoolTransaction { id: tx'.id, raw: tx'.cbor }
       ) <|>
         ( do
-            aesonNull tx
+            caseAesonNull (Left (TypeMismatch "Null")) pure $ tx
             pure Nothing
         )
     pure $ MaybeMempoolTransaction $ res
@@ -517,7 +517,7 @@ instance Show ReleasedMempool where
 instance DecodeAeson ReleasedMempool where
   decodeAeson = aesonObject \o -> do
     released <- o .: "released"
-    flip aesonString released $ \s ->
+    flip (caseAesonString (Left (TypeMismatch "String"))) released $ \s ->
       if s == "mempool" then
         pure $ ReleasedMempool
       else
@@ -526,3 +526,9 @@ instance DecodeAeson ReleasedMempool where
 instance DecodeOgmios ReleasedMempool where
   decodeOgmios = decodeResult decodeAeson
 
+aesonObject
+  :: forall (a :: Type)
+   . (Object Aeson -> Either JsonDecodeError a)
+  -> Aeson
+  -> Either JsonDecodeError a
+aesonObject = caseAesonObject (Left (TypeMismatch "Object"))

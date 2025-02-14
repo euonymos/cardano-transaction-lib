@@ -10,9 +10,15 @@ module Ctl.Internal.QueryM.Ogmios.Mempool.JsonRpc2
 
 import Prelude
 
-import Aeson (class EncodeAeson, Aeson, JsonDecodeError, encodeAeson, getField)
-import Ctl.Internal.Service.Helpers (aesonObject)
-import Data.Either (Either)
+import Aeson
+  ( class EncodeAeson
+  , Aeson
+  , JsonDecodeError(TypeMismatch)
+  , caseAesonObject
+  , encodeAeson
+  , getField
+  )
+import Data.Either (Either(Left))
 import Effect (Effect)
 import Record as Record
 
@@ -72,5 +78,5 @@ parseJsonRpc2ResponseId
   :: Aeson
   -> Either JsonDecodeError String
 parseJsonRpc2ResponseId =
-  aesonObject $ flip getField "id"
+  caseAesonObject (Left (TypeMismatch "Object")) $ flip getField "id"
 
