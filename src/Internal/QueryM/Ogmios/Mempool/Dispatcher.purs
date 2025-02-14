@@ -1,28 +1,22 @@
 module Ctl.Internal.QueryM.Ogmios.Mempool.Dispatcher
   ( DispatchError(JsonError, FaultError, ListenerCancelled)
   , Dispatcher
-  , GenericPendingRequests
-  , PendingRequests
-  , PendingSubmitTxRequests
   , RequestBody
   , WebsocketDispatch
   , dispatchErrorToError
   , mkWebsocketDispatch
   , newDispatcher
-  , newPendingRequests
   , ListenerId
   ) where
 
 import Prelude
 
 import Aeson (Aeson, JsonDecodeError, stringifyAeson)
-import Cardano.Types.TransactionHash (TransactionHash)
 import Ctl.Internal.QueryM.Ogmios.Mempool.JsonRpc2 (parseJsonRpc2ResponseId)
 import Data.Either (Either(Left, Right))
 import Data.Map (Map)
 import Data.Map (empty, lookup) as Map
 import Data.Maybe (Maybe(Just, Nothing))
-import Data.Tuple.Nested (type (/\))
 import Effect (Effect)
 import Effect.Exception (Error, error)
 import Effect.Ref (Ref)
@@ -76,16 +70,3 @@ mkWebsocketDispatch dispatcher aeson = do
         Nothing -> pure $ Left $ ListenerCancelled reflection
         Just action -> pure $ Right $ action aeson
 
-type ShouldResend = Boolean
-
-type GenericPendingRequests (requestData :: Type) =
-  Ref (Map ListenerId requestData)
-
-newPendingRequests
-  :: forall (requestData :: Type). Effect (GenericPendingRequests requestData)
-newPendingRequests = Ref.new Map.empty
-
-type PendingRequests = GenericPendingRequests RequestBody
-
-type PendingSubmitTxRequests = GenericPendingRequests
-  (RequestBody /\ TransactionHash)

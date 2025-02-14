@@ -48,13 +48,10 @@ import Control.Monad.Error.Class (liftEither, throwError)
 import Ctl.Internal.QueryM.Ogmios.Mempool.Dispatcher
   ( DispatchError(JsonError)
   , Dispatcher
-  , GenericPendingRequests
-  , PendingRequests
   , RequestBody
   , WebsocketDispatch
   , mkWebsocketDispatch
   , newDispatcher
-  , newPendingRequests
   )
 import Ctl.Internal.QueryM.Ogmios.Mempool.JsWebSocket
   ( JsWebSocket
@@ -91,7 +88,6 @@ import Data.Map as Map
 import Data.Maybe (Maybe(Nothing, Just))
 import Data.Newtype (class Newtype, wrap)
 import Data.Show.Generic (genericShow)
-import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
 import Effect.Aff (Aff, Canceler(Canceler), makeAff)
 import Effect.Class (liftEffect)
@@ -186,8 +182,6 @@ listeners (WebSocket _ ls) = ls
 -- OgmiosWebSocket Setup and PrimOps
 --------------------------------------------------------------------------------
 
-type IsTxConfirmed = TransactionHash -> Aff Boolean
-
 mkOgmiosWebSocketAff
   :: Logger
   -> String
@@ -258,21 +252,20 @@ mkOgmiosWebSocketLens
   -> Effect (MkServiceWebSocketLens OgmiosListeners)
 mkOgmiosWebSocketLens logger = do
   dispatcher <- newDispatcher
-  pendingRequests <- newPendingRequests
   pure $
     let
       ogmiosWebSocket :: JsWebSocket -> OgmiosWebSocket
       ogmiosWebSocket ws = WebSocket ws
         { acquireMempool:
-            mkListenerSet dispatcher pendingRequests
+            mkListenerSet dispatcher
         , releaseMempool:
-            mkListenerSet dispatcher pendingRequests
+            mkListenerSet dispatcher
         , mempoolHasTx:
-            mkListenerSet dispatcher pendingRequests
+            mkListenerSet dispatcher
         , mempoolNextTx:
-            mkListenerSet dispatcher pendingRequests
+            mkListenerSet dispatcher
         , mempoolSizeAndCapacity:
-            mkListenerSet dispatcher pendingRequests
+            mkListenerSet dispatcher
         }
 
     in
@@ -302,9 +295,6 @@ type ListenerSet (request :: Type) (response :: Type) =
       -> Effect Unit
   , removeMessageListener :: ListenerId -> Effect Unit
   -- ^ Removes ID from dispatch map and pending requests queue.
-  , addRequest :: ListenerId -> RequestBody /\ request -> Effect Unit
-  -- ^ Saves request body until the request is fulfilled. The body is used
-  --  to replay requests in case of a WebSocket failure.
   }
 
 mkAddMessageListener
@@ -324,12 +314,10 @@ mkAddMessageListener dispatcher =
 mkRemoveMessageListener
   :: forall (requestData :: Type)
    . Dispatcher
-  -> GenericPendingRequests requestData
   -> (ListenerId -> Effect Unit)
-mkRemoveMessageListener dispatcher pendingRequests =
+mkRemoveMessageListener dispatcher =
   \reflection -> do
     Ref.modify_ (Map.delete reflection) dispatcher
-    Ref.modify_ (Map.delete reflection) pendingRequests
 
 -- we manipluate closures to make the DispatchIdMap updateable using these
 -- methods, this can be picked up by a query or cancellation function
@@ -337,16 +325,12 @@ mkListenerSet
   :: forall (request :: Type) (response :: Type)
    . DecodeOgmios response
   => Dispatcher
-  -> PendingRequests
   -> ListenerSet request response
-mkListenerSet dispatcher pendingRequests =
+mkListenerSet dispatcher =
   { addMessageListener:
       mkAddMessageListener dispatcher
   , removeMessageListener:
-      mkRemoveMessageListener dispatcher pendingRequests
-  , addRequest:
-      \reflection (requestBody /\ _) ->
-        Ref.modify_ (Map.insert reflection requestBody) pendingRequests
+      mkRemoveMessageListener dispatcher
   }
 
 mkRequestAff
@@ -375,7 +359,6 @@ mkRequestAff listeners' webSocket logger jsonRpc2Call getLs input = do
             respLs.removeMessageListener id
             cont $ lmap ogmiosDecodeErrorToError res
         )
-      respLs.addRequest id (sBody /\ input)
       _wsSend webSocket (logger Debug) sBody
       -- Uncomment this code fragment to test `SubmitTx` request resend logic:
       pure $ Canceler $ \err -> do
