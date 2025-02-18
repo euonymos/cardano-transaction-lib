@@ -2,13 +2,11 @@ module Test.Ctl.BalanceTx.Time (suite) where
 
 import Contract.Prelude
 
+import Cardano.Types (BigNum, Transaction, _body)
+import Cardano.Types.BigNum (fromInt, toInt) as BigNum
 import Contract.Config (testnetConfig)
 import Contract.Monad (Contract, runContract)
-import Contract.ScriptLookups
-  ( ScriptLookups
-  , UnattachedUnbalancedTx
-  , mkUnbalancedTx
-  )
+import Contract.ScriptLookups (ScriptLookups)
 import Contract.Time
   ( POSIXTime
   , Slot
@@ -24,18 +22,15 @@ import Contract.Time
   , to
   )
 import Contract.TxConstraints (mustValidateIn)
+import Contract.UnbalancedTx (mkUnbalancedTxE)
 import Control.Monad.Except (throwError)
-import Ctl.Internal.Cardano.Types.Transaction (_body)
-import Ctl.Internal.Test.TestPlanM (TestPlanM)
-import Ctl.Internal.Types.BigNum (BigNum)
-import Ctl.Internal.Types.BigNum (fromInt, toInt) as BigNum
 import Ctl.Internal.Types.Interval (Interval)
-import Ctl.Internal.Types.UnbalancedTransaction (_transaction)
-import Data.BigInt (fromString) as BigInt
-import Data.Lens (view)
+import Data.Lens ((^.))
 import Effect.Aff (Aff)
 import Effect.Exception (error)
+import JS.BigInt (fromString) as BigInt
 import Mote (group, test)
+import Mote.TestPlanM (TestPlanM)
 import Partial.Unsafe (unsafePartial)
 import Test.Spec.Assertions (fail, shouldEqual)
 
@@ -85,10 +80,10 @@ mkTestFromSingleInterval :: Interval POSIXTime -> Contract Unit
 mkTestFromSingleInterval interval = do
   let
     constraint = mustValidateIn interval
-  mutx <- mkUnbalancedTx emptyLookup constraint
+  mutx <- mkUnbalancedTxE emptyLookup constraint
   case mutx of
     Left e -> fail $ show e
-    Right utx ->
+    Right (utx /\ _) ->
       do
         returnedInterval <- getTimeFromUnbalanced utx
         returnedInterval `shouldEqual` interval
@@ -97,7 +92,7 @@ testEmptyInterval :: Contract Unit
 testEmptyInterval = do
   let
     constraint = mustValidateIn never
-  mutx <- mkUnbalancedTx emptyLookup constraint
+  mutx <- mkUnbalancedTxE emptyLookup constraint
   case mutx of
     Left _ -> pure unit
     Right utx -> fail $ "Empty interval must fail : " <> show utx
@@ -110,7 +105,7 @@ testEmptyMultipleIntervals = do
       , mkFiniteInterval (now + mkPosixTime "3000") (now + mkPosixTime "4000")
       ]
     constraint = foldMap mustValidateIn intervals
-  mutx <- mkUnbalancedTx emptyLookup constraint
+  mutx <- mkUnbalancedTxE emptyLookup constraint
   case mutx of
     Left _ -> pure unit
     Right utx -> fail $ "Empty interval must fail : " <> show utx
@@ -120,10 +115,10 @@ mkTestMultipleInterval
 mkTestMultipleInterval intervals expected = do
   let
     constraint = foldMap mustValidateIn intervals
-  mutx <- mkUnbalancedTx emptyLookup constraint
+  mutx <- mkUnbalancedTxE emptyLookup constraint
   case mutx of
     Left e -> fail $ show e
-    Right utx ->
+    Right (utx /\ _) ->
       do
         returnedInterval <- getTimeFromUnbalanced utx
         returnedInterval `shouldEqual` expected
@@ -132,7 +127,7 @@ mkTestMultipleInterval intervals expected = do
 -- Fixtures
 --------------------------------------------------------------------------------
 
-emptyLookup :: ScriptLookups Void
+emptyLookup :: ScriptLookups
 emptyLookup = mempty
 
 now :: POSIXTime
@@ -149,17 +144,14 @@ unsafeSubtractOne value = wrap <<< fromJust
 --------------------------------------------------------------------------------
 
 getTimeFromUnbalanced
-  :: UnattachedUnbalancedTx -> Contract (Interval POSIXTime)
-getTimeFromUnbalanced utx = validityToPosixTime $ unwrap body
-  where
-  body = (_transaction <<< _body) `view` (unwrap utx).unbalancedTx
+  :: Transaction -> Contract (Interval POSIXTime)
+getTimeFromUnbalanced tx = validityToPosixTime $ unwrap $ tx ^. _body
 
 toPosixTime :: Slot -> Contract POSIXTime
 toPosixTime time = do
   eraSummaries <- getEraSummaries
   systemStart <- getSystemStart
-  eitherTime <- liftEffect $ slotToPosixTime eraSummaries systemStart time
-  case eitherTime of
+  case slotToPosixTime eraSummaries systemStart time of
     Left e -> (throwError <<< error <<< show) e
     Right value -> pure value
 
@@ -167,9 +159,7 @@ toPosixTimeRange :: Interval Slot -> Contract (Interval POSIXTime)
 toPosixTimeRange range = do
   eraSummaries <- getEraSummaries
   systemStart <- getSystemStart
-  eitherRange <- liftEffect $
-    slotRangeToPosixTimeRange eraSummaries systemStart range
-  case eitherRange of
+  case slotRangeToPosixTimeRange eraSummaries systemStart range of
     Left e -> (throwError <<< error <<< show) e
     Right value -> pure value
 
@@ -206,4 +196,3 @@ validityToPosixTime { validityStartInterval, ttl: timeToLive } =
 
 mkPosixTime :: String -> POSIXTime
 mkPosixTime = wrap <<< unsafePartial fromJust <<< BigInt.fromString
-

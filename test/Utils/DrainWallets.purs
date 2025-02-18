@@ -2,7 +2,6 @@ module Test.Ctl.Utils.DrainWallets (main) where
 
 import Prelude
 
-import Contract.Address (getWalletAddresses, ownPaymentPubKeysHashes)
 import Contract.Config
   ( PrivatePaymentKeySource(PrivatePaymentKeyFile)
   , WalletSpec(UseKeys)
@@ -10,8 +9,8 @@ import Contract.Config
   , mkCtlBackendParams
   , testnetConfig
   )
-import Contract.Monad (liftedE, runContract)
-import Contract.ScriptLookups (ScriptLookups, mkUnbalancedTx, unspentOutputs)
+import Contract.Monad (runContract)
+import Contract.ScriptLookups (unspentOutputs)
 import Contract.Transaction
   ( awaitTxConfirmed
   , balanceTx
@@ -19,8 +18,14 @@ import Contract.Transaction
   , submit
   )
 import Contract.TxConstraints (mustBeSignedBy, mustSpendPubKeyOutput)
+import Contract.UnbalancedTx (mkUnbalancedTx)
 import Contract.Utxos (utxosAt)
-import Contract.Wallet (privateKeysToKeyWallet, withKeyWallet)
+import Contract.Wallet
+  ( getWalletAddresses
+  , ownPaymentPubKeyHashes
+  , privateKeysToKeyWallet
+  , withKeyWallet
+  )
 import Contract.Wallet.KeyFile
   ( privatePaymentKeyFromFile
   , privateStakeKeyFromFile
@@ -35,6 +40,7 @@ import Data.Maybe (Maybe(Nothing))
 import Data.Newtype (unwrap, wrap)
 import Data.String (joinWith)
 import Data.Traversable (for)
+import Data.Tuple.Nested ((/\))
 import Data.UInt as UInt
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
@@ -74,7 +80,7 @@ run privateKey walletsDir = runContract config do
       ( privateStakeKeyFromFile $ Path.concat
           [ walletsDir, walletFolder, "stake_signing_key" ]
       )
-    pure $ privateKeysToKeyWallet payment mbStake
+    pure $ privateKeysToKeyWallet payment mbStake Nothing
 
   let
     merge r =
@@ -88,7 +94,7 @@ run privateKey walletsDir = runContract config do
     do
       address <- getWalletAddresses >>= head >>> liftMaybe
         (error "no addresses")
-      pkh <- ownPaymentPubKeysHashes >>= head >>> liftMaybe (error "no PKH")
+      pkh <- ownPaymentPubKeyHashes >>= head >>> liftMaybe (error "no PKH")
       utxos <- utxosAt address
       pure
         { utxos
@@ -115,10 +121,9 @@ run privateKey walletsDir = runContract config do
       <> foldMap (_.pkh >>> mustBeSignedBy) usedWallets
     lookups = unspentOutputs utxos
 
-  unbalancedTx <- liftedE $ mkUnbalancedTx (lookups :: ScriptLookups Void)
-    constraints
+  unbalancedTx /\ usedUtxos <- mkUnbalancedTx lookups constraints
 
-  balancedTx <- liftedE $ balanceTx unbalancedTx
+  balancedTx <- balanceTx unbalancedTx usedUtxos mempty
   balancedSignedTx <- Array.foldM
     (\tx wallet -> withKeyWallet wallet $ signTransaction tx)
     (wrap $ unwrap balancedTx)
@@ -130,6 +135,7 @@ run privateKey walletsDir = runContract config do
     testnetConfig
       { walletSpec = pure $ UseKeys
           (PrivatePaymentKeyFile privateKey)
+          Nothing
           Nothing
       , backendParams = mkCtlBackendParams
           { ogmiosConfig: defaultOgmiosWsConfig

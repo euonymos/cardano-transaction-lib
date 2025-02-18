@@ -6,7 +6,8 @@ module Ctl.Internal.Types.Rational
   , recip
   , numerator
   , denominator
-  , denominatorAsNat
+  , toUnitInterval
+  , fromNumber
   ) where
 
 import Prelude
@@ -20,18 +21,17 @@ import Aeson
   , toStringifiedNumbersJson
   , (.:)
   )
-import Ctl.Internal.FromData (class FromData)
-import Ctl.Internal.ToData (class ToData)
-import Ctl.Internal.Types.BigNum as BigNum
-import Ctl.Internal.Types.Natural (Natural)
-import Ctl.Internal.Types.Natural (fromBigInt', toBigInt) as Nat
-import Ctl.Internal.Types.PlutusData (PlutusData(Constr, Integer))
-import Data.BigInt (BigInt)
-import Data.BigInt (fromInt) as BigInt
+import Cardano.FromData (class FromData)
+import Cardano.ToData (class ToData)
+import Cardano.Types (PlutusData(Constr, Integer), UnitInterval)
+import Cardano.Types.BigNum as BigNum
 import Data.Either (Either(Left))
 import Data.Maybe (Maybe(Just, Nothing), maybe)
+import Data.Newtype (wrap)
 import Data.Ratio (Ratio)
 import Data.Ratio (denominator, numerator, (%)) as Ratio
+import JS.BigInt (BigInt)
+import JS.BigInt (fromInt) as BigInt
 
 -- | `Rational` is a newtype over `Ratio` with a smart constructor `reduce`
 -- | that allows to create a `Rational` safely. The constructor is not exposed.
@@ -92,11 +92,6 @@ numerator (Rational r) = Ratio.numerator r
 denominator :: Rational -> BigInt
 denominator (Rational r) = Ratio.denominator r
 
--- This is safe because the denominator is guaranteed to be positive.
--- | Get the denominator of a `Rational` as `Natural`.
-denominatorAsNat :: Rational -> Natural
-denominatorAsNat = Nat.fromBigInt' <<< denominator
-
 --------------------------------------------------------------------------------
 -- FromData / ToData
 --------------------------------------------------------------------------------
@@ -133,5 +128,18 @@ instance RationalComponent BigInt where
 instance RationalComponent Int where
   reduce n d = reduce (BigInt.fromInt n) (BigInt.fromInt d)
 
-instance RationalComponent Natural where
-  reduce n d = reduce (Nat.toBigInt n) (Nat.toBigInt d)
+toUnitInterval :: Rational -> Maybe UnitInterval
+toUnitInterval (Rational r) = do
+  numerator' <- BigNum.fromBigInt $ Ratio.numerator r
+  denominator' <- BigNum.fromBigInt $ Ratio.denominator r
+  pure $ wrap { numerator: numerator', denominator: denominator' }
+
+foreign import decimalToFraction
+  :: Number -> { numerator :: Int, denominator :: Int }
+
+fromNumber :: Number -> Maybe Rational
+fromNumber n =
+  let
+    { numerator, denominator } = decimalToFraction n
+  in
+    reduce (BigInt.fromInt numerator) (BigInt.fromInt denominator)

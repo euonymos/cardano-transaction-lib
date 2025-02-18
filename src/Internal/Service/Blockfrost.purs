@@ -49,6 +49,7 @@ module Ctl.Internal.Service.Blockfrost
   , getScriptByHash
   , getScriptInfo
   , getSystemStart
+  , getTxAuxiliaryData
   , getTxMetadata
   , getUtxoByOref
   , getValidatorHashDelegationsAndRewards
@@ -63,40 +64,95 @@ import Prelude
 import Aeson
   ( class DecodeAeson
   , Aeson
-  , Finite
   , JsonDecodeError(TypeMismatch, MissingValue, AtKey)
   , decodeAeson
   , decodeJsonString
+  , encodeAeson
   , getField
   , getFieldOptional
   , getFieldOptional'
   , isNull
   , parseJsonStringToAeson
   , stringifyAeson
-  , unpackFinite
   , (.:)
   , (.:!)
   )
-import Affjax (Error, Response, URL, defaultRequest, printError, request) as Affjax
+import Affjax (Error, Response, URL, defaultRequest, printError) as Affjax
 import Affjax.RequestBody (RequestBody, arrayView, string) as Affjax
 import Affjax.RequestHeader (RequestHeader(ContentType, RequestHeader)) as Affjax
 import Affjax.ResponseFormat (string) as Affjax.ResponseFormat
 import Affjax.StatusCode (StatusCode(StatusCode)) as Affjax
-import Contract.RewardAddress
-  ( rewardAddressToBech32
-  , stakePubKeyHashRewardAddress
-  , stakeValidatorHashRewardAddress
+import Cardano.AsCbor (decodeCbor, encodeCbor)
+import Cardano.Provider.Error
+  ( ClientError
+      ( ClientDecodeJsonError
+      , ClientHttpError
+      , ClientHttpResponseError
+      , ClientOtherError
+      )
+  , GetTxMetadataError
+      ( GetTxMetadataTxNotFoundError
+      , GetTxMetadataClientError
+      , GetTxMetadataMetadataEmptyOrMissingError
+      )
+  , ServiceError(ServiceBlockfrostError)
   )
-import Control.Alt ((<|>))
-import Control.Monad.Error.Class (liftMaybe, throwError)
-import Control.Monad.Except.Trans (ExceptT(ExceptT), runExceptT)
-import Control.Monad.Logger.Class (log)
-import Control.Monad.Logger.Trans (LoggerT(LoggerT), runLoggerT)
-import Control.Monad.Maybe.Trans (MaybeT(MaybeT), runMaybeT)
-import Control.Monad.Reader.Class (ask, asks)
-import Control.Monad.Reader.Trans (ReaderT, runReaderT)
-import Control.Parallel (parTraverse)
-import Ctl.Internal.Cardano.Types.NativeScript
+import Cardano.Provider.TxEvaluation
+  ( ExecutionUnits
+  , OgmiosDatum
+  , OgmiosScript
+  , OgmiosTxIn
+  , RedeemerPointer
+  , ScriptFailure
+  , TxEvaluationFailure(ScriptFailures, UnparsedError)
+  , TxEvaluationR
+  , TxEvaluationResult(TxEvaluationResult)
+  )
+import Cardano.Provider.TxEvaluation as TxEvaluation
+import Cardano.Serialization.Lib (toBytes)
+import Cardano.Types
+  ( AssetClass(AssetClass)
+  , AuxiliaryData
+  , DataHash
+  , GeneralTransactionMetadata(GeneralTransactionMetadata)
+  , Language(PlutusV3, PlutusV2, PlutusV1)
+  , PlutusData
+  , PoolPubKeyHash
+  , RawBytes
+  , RedeemerTag
+  , ScriptHash
+  , StakePubKeyHash
+  , Transaction
+  , TransactionHash
+  , TransactionInput(TransactionInput)
+  , TransactionOutput(TransactionOutput)
+  , UnitInterval(UnitInterval)
+  , UtxoMap
+  , Value
+  )
+import Cardano.Types.Address (Address)
+import Cardano.Types.Address as Address
+import Cardano.Types.Bech32String (Bech32String)
+import Cardano.Types.BigNum (BigNum)
+import Cardano.Types.BigNum as BigNum
+import Cardano.Types.CborBytes (CborBytes)
+import Cardano.Types.Chain (Tip(Tip, TipAtGenesis))
+import Cardano.Types.Coin (Coin(Coin))
+import Cardano.Types.Credential
+  ( Credential(PubKeyHashCredential, ScriptHashCredential)
+  )
+import Cardano.Types.DelegationsAndRewards (DelegationsAndRewards)
+import Cardano.Types.Epoch (Epoch(Epoch))
+import Cardano.Types.EraSummaries
+  ( EraSummaries
+  , EraSummary
+  , EraSummaryParameters
+  )
+import Cardano.Types.ExUnitPrices (ExUnitPrices(ExUnitPrices))
+import Cardano.Types.ExUnits (ExUnits(ExUnits))
+import Cardano.Types.GeneralTransactionMetadata as GeneralTransactionMetadata
+import Cardano.Types.Int (Int) as Cardano
+import Cardano.Types.NativeScript
   ( NativeScript
       ( ScriptAll
       , ScriptAny
@@ -106,138 +162,85 @@ import Ctl.Internal.Cardano.Types.NativeScript
       , TimelockStart
       )
   )
-import Ctl.Internal.Cardano.Types.ScriptRef
-  ( ScriptRef(NativeScriptRef, PlutusScriptRef)
-  )
-import Ctl.Internal.Cardano.Types.Transaction
-  ( Costmdls(Costmdls)
-  , PoolPubKeyHash
-  , Transaction
-  , TransactionOutput(TransactionOutput)
-  , UtxoMap
-  , poolPubKeyHashToBech32
-  )
-import Ctl.Internal.Cardano.Types.Value (Coin(Coin), Value)
-import Ctl.Internal.Cardano.Types.Value
-  ( lovelaceValueOf
-  , mkSingletonNonAdaAsset
-  , mkValue
-  ) as Value
-import Ctl.Internal.Contract.QueryBackend (BlockfrostBackend)
-import Ctl.Internal.Contract.QueryHandle.Error
-  ( GetTxMetadataError
-      ( GetTxMetadataTxNotFoundError
-      , GetTxMetadataClientError
-      , GetTxMetadataMetadataEmptyOrMissingError
-      )
-  )
-import Ctl.Internal.Deserialization.FromBytes (fromBytes)
-import Ctl.Internal.Deserialization.PlutusData (deserializeData)
-import Ctl.Internal.Deserialization.Transaction
-  ( convertGeneralTransactionMetadata
-  )
-import Ctl.Internal.QueryM.Ogmios (TxEvaluationR)
-import Ctl.Internal.QueryM.Pools (DelegationsAndRewards)
-import Ctl.Internal.Serialization as Serialization
-import Ctl.Internal.Serialization.Address
-  ( Address
-  , NetworkId
-  , addressBech32
-  , addressFromBech32
-  )
-import Ctl.Internal.Serialization.Hash
-  ( ScriptHash
-  , ed25519KeyHashFromBytes
-  , scriptHashToBytes
-  )
+import Cardano.Types.NetworkId (NetworkId)
+import Cardano.Types.OutputDatum (OutputDatum(OutputDatum, OutputDatumHash))
+import Cardano.Types.PlutusScript (PlutusScript)
+import Cardano.Types.PlutusScript as PlutusScript
+import Cardano.Types.PoolPubKeyHash as PoolPubKeyHash
+import Cardano.Types.RedeemerTag (RedeemerTag(Spend, Mint, Cert, Reward)) as RedeemerTag
+import Cardano.Types.RewardAddress as RewardAddress
+import Cardano.Types.ScriptRef (ScriptRef(NativeScriptRef, PlutusScriptRef))
+import Cardano.Types.Value (assetToValue, lovelaceValueOf, sum) as Value
+import Control.Alt ((<|>))
+import Control.Monad.Error.Class (liftMaybe, throwError)
+import Control.Monad.Except.Trans (ExceptT(ExceptT), runExceptT)
+import Control.Monad.Logger.Class (log)
+import Control.Monad.Logger.Trans (LoggerT(LoggerT), runLoggerT)
+import Control.Monad.Maybe.Trans (MaybeT(MaybeT), runMaybeT)
+import Control.Monad.Reader (ReaderT(ReaderT))
+import Control.Monad.Reader.Class (ask, asks)
+import Control.Monad.Reader.Trans (ReaderT, runReaderT)
+import Control.Parallel (parTraverse)
+import Ctl.Internal.Affjax (request) as Affjax
+import Ctl.Internal.Contract.ProviderBackend (BlockfrostBackend)
+import Ctl.Internal.QueryM.Ogmios.Types (AdditionalUtxoSet)
 import Ctl.Internal.ServerConfig (ServerConfig, mkHttpUrl)
-import Ctl.Internal.Service.Error
-  ( ClientError
-      ( ClientDecodeJsonError
-      , ClientHttpError
-      , ClientHttpResponseError
-      , ClientOtherError
-      )
-  , ServiceError(ServiceBlockfrostError)
-  )
 import Ctl.Internal.Service.Helpers
   ( aesonArray
   , aesonObject
   , aesonString
   , decodeAssetClass
   )
-import Ctl.Internal.Types.Aliases (Bech32String)
-import Ctl.Internal.Types.BigNum (BigNum)
-import Ctl.Internal.Types.BigNum as BigNum
-import Ctl.Internal.Types.ByteArray (ByteArray, byteArrayToHex)
-import Ctl.Internal.Types.CborBytes (CborBytes, cborBytesToHex)
-import Ctl.Internal.Types.Chain (Tip(Tip, TipAtGenesis))
-import Ctl.Internal.Types.Datum (DataHash(DataHash), Datum)
-import Ctl.Internal.Types.Epoch (Epoch(Epoch))
-import Ctl.Internal.Types.EraSummaries
-  ( EraSummaries
-  , EraSummary
-  , EraSummaryParameters
-  )
-import Ctl.Internal.Types.OutputDatum
-  ( OutputDatum(NoOutputDatum, OutputDatum, OutputDatumHash)
-  )
 import Ctl.Internal.Types.ProtocolParameters
-  ( CoinsPerUtxoUnit(CoinsPerUtxoWord, CoinsPerUtxoByte)
-  , CostModelV1
+  ( CostModelV1
   , CostModelV2
   , ProtocolParameters(ProtocolParameters)
   , convertPlutusV1CostModel
   , convertPlutusV2CostModel
+  , convertPlutusV3CostModel
+  , convertUnnamedPlutusCostModel
   )
-import Ctl.Internal.Types.PubKeyHash (StakePubKeyHash)
 import Ctl.Internal.Types.Rational (Rational, reduce)
-import Ctl.Internal.Types.RawBytes (rawBytesToHex)
-import Ctl.Internal.Types.Scripts
-  ( Language(PlutusV2, PlutusV1)
-  , StakeValidatorHash
-  , plutusV1Script
-  , plutusV2Script
-  )
+import Ctl.Internal.Types.Rational as Rational
+import Ctl.Internal.Types.StakeValidatorHash (StakeValidatorHash)
 import Ctl.Internal.Types.SystemStart (SystemStart(SystemStart))
-import Ctl.Internal.Types.Transaction
-  ( TransactionHash
-  , TransactionInput(TransactionInput)
-  )
-import Ctl.Internal.Types.TransactionMetadata
-  ( GeneralTransactionMetadata(GeneralTransactionMetadata)
-  )
+import Data.Array (catMaybes)
 import Data.Array (find, length) as Array
 import Data.Bifunctor (lmap)
-import Data.BigInt (BigInt)
-import Data.BigInt (fromString, toNumber) as BigInt
 import Data.BigNumber (BigNumber, toFraction)
 import Data.BigNumber as BigNumber
+import Data.ByteArray (ByteArray, byteArrayToHex)
 import Data.DateTime.Instant (instant, toDateTime)
-import Data.Either (Either(Left, Right), either, note)
-import Data.Foldable (fold)
+import Data.Either (Either(Left, Right), either, hush, note)
 import Data.Generic.Rep (class Generic)
 import Data.HTTP.Method (Method(GET, POST))
 import Data.JSDate (JSDate, now)
 import Data.Log.Level (LogLevel(Trace))
 import Data.Log.Message (Message)
-import Data.Map (empty, fromFoldable, isEmpty, unions) as Map
+import Data.Map (Map)
+import Data.Map (empty, fromFoldable, isEmpty) as Map
 import Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe)
 import Data.MediaType (MediaType(MediaType))
+import Data.MediaType.Common (applicationJSON) as MediaType
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Number (infinity)
 import Data.Show.Generic (genericShow)
-import Data.String (splitAt) as String
+import Data.String (Pattern(Pattern))
+import Data.String (split, splitAt) as String
 import Data.Time.Duration (Seconds(Seconds), convertDuration)
 import Data.Traversable (for, for_, traverse)
 import Data.Tuple (Tuple(Tuple), fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.UInt (UInt)
+import Data.UInt (fromString) as UInt
 import Effect.Aff (Aff)
 import Effect.Aff.Class (liftAff)
 import Effect.Class (liftEffect)
 import Effect.Exception (error)
 import Foreign.Object (Object)
+import Foreign.Object as ForeignObject
+import JS.BigInt (fromString, toNumber) as BigInt
+import Prim.TypeError (class Warn, Text)
 
 --------------------------------------------------------------------------------
 -- BlockfrostServiceM
@@ -314,7 +317,7 @@ data BlockfrostEndpoint
   | DatumCbor DataHash
   -- /network/eras
   | EraSummaries
-  -- /utils/txs/evaluate
+  -- /utils/txs/evaluate/utxos
   | EvaluateTransaction
   -- /blocks/latest
   | LatestBlock
@@ -357,12 +360,12 @@ realizeEndpoint endpoint =
   case endpoint of
     BlockchainGenesis ->
       "/genesis"
-    DatumCbor (DataHash hashBytes) ->
-      "/scripts/datum/" <> byteArrayToHex hashBytes <> "/cbor"
+    DatumCbor hash ->
+      "/scripts/datum/" <> byteArrayToHex (unwrap $ encodeCbor hash) <> "/cbor"
     EraSummaries ->
       "/network/eras"
     EvaluateTransaction ->
-      "/utils/txs/evaluate"
+      "/utils/txs/evaluate/utxos"
     LatestBlock ->
       "/blocks/latest"
     LatestEpoch ->
@@ -370,26 +373,26 @@ realizeEndpoint endpoint =
     LatestProtocolParameters ->
       "/epochs/latest/parameters"
     NativeScriptByHash scriptHash ->
-      "/scripts/" <> rawBytesToHex (scriptHashToBytes scriptHash) <> "/json"
+      "/scripts/" <> byteArrayToHex (unwrap $ encodeCbor scriptHash) <> "/json"
     PlutusScriptCborByHash scriptHash ->
-      "/scripts/" <> rawBytesToHex (scriptHashToBytes scriptHash) <> "/cbor"
+      "/scripts/" <> byteArrayToHex (unwrap $ encodeCbor scriptHash) <> "/cbor"
     ScriptInfo scriptHash ->
-      "/scripts/" <> rawBytesToHex (scriptHashToBytes scriptHash)
+      "/scripts/" <> byteArrayToHex (unwrap $ encodeCbor scriptHash)
     SubmitTransaction ->
       "/tx/submit"
     Transaction txHash ->
-      "/txs/" <> byteArrayToHex (unwrap txHash)
+      "/txs/" <> byteArrayToHex (toBytes $ unwrap txHash)
     TransactionMetadata txHash ->
-      "/txs/" <> byteArrayToHex (unwrap txHash) <> "/metadata/cbor"
+      "/txs/" <> byteArrayToHex (toBytes $ unwrap txHash) <> "/metadata/cbor"
     UtxosAtAddress address page count ->
-      "/addresses/" <> addressBech32 address <> "/utxos?page=" <> show page
+      "/addresses/" <> Address.toBech32 address <> "/utxos?page=" <> show page
         <> ("&count=" <> show count)
     UtxosOfTransaction txHash ->
-      "/txs/" <> byteArrayToHex (unwrap txHash) <> "/utxos"
+      "/txs/" <> byteArrayToHex (toBytes $ unwrap txHash) <> "/utxos"
     PoolIds page count ->
       "/pools?page=" <> show page <> "&count=" <> show count <> "&order=asc"
     PoolParameters poolPubKeyHash ->
-      "/pool/" <> poolPubKeyHashToBech32 poolPubKeyHash
+      "/pool/" <> PoolPubKeyHash.toBech32 poolPubKeyHash
     DelegationsAndRewards credential ->
       "/accounts/" <> blockfrostStakeCredentialToBech32 credential
 
@@ -572,7 +575,7 @@ getOutputAddressesByTxHash txHash = runExceptT do
 --------------------------------------------------------------------------------
 
 getDatumByHash
-  :: DataHash -> BlockfrostServiceM (Either ClientError (Maybe Datum))
+  :: DataHash -> BlockfrostServiceM (Either ClientError (Maybe PlutusData))
 getDatumByHash dataHash =
   blockfrostGetRequest (DatumCbor dataHash) <#> \response ->
     handle404AsNothing
@@ -592,10 +595,10 @@ getScriptByHash scriptHash = runExceptT $ runMaybeT do
       NativeScriptRef <$>
         MaybeT (ExceptT getNativeScriptByHash)
     PlutusV1Script ->
-      PlutusScriptRef <<< plutusV1Script <$>
+      PlutusScriptRef <<< PlutusScript.plutusV1Script <$>
         MaybeT (ExceptT getPlutusScriptCborByHash)
     PlutusV2Script ->
-      PlutusScriptRef <<< plutusV2Script <$>
+      PlutusScriptRef <<< PlutusScript.plutusV2Script <$>
         MaybeT (ExceptT getPlutusScriptCborByHash)
   where
   getNativeScriptByHash
@@ -606,11 +609,13 @@ getScriptByHash scriptHash = runExceptT $ runMaybeT do
         handle404AsNothing (handleBlockfrostResponse response)
 
   getPlutusScriptCborByHash
-    :: BlockfrostServiceM (Either ClientError (Maybe ByteArray))
+    :: BlockfrostServiceM (Either ClientError (Maybe RawBytes))
   getPlutusScriptCborByHash =
     blockfrostGetRequest (PlutusScriptCborByHash scriptHash) <#> \response ->
       handle404AsNothing
-        (unwrapBlockfrostCbor <$> handleBlockfrostResponse response)
+        ( map wrap <<< unwrapBlockfrostCbor <$> handleBlockfrostResponse
+            response
+        )
 
 getScriptInfo
   :: ScriptHash
@@ -627,20 +632,19 @@ submitTx
   :: Transaction
   -> BlockfrostServiceM (Either ClientError TransactionHash)
 submitTx tx = do
-  cslTx <- liftEffect $ Serialization.convertTransaction tx
-  handleBlockfrostResponse <$> request (Serialization.toBytes cslTx)
+  handleBlockfrostResponse <$> request (unwrap $ encodeCbor tx)
   where
   request
-    :: CborBytes
+    :: ByteArray
     -> BlockfrostServiceM (Either Affjax.Error (Affjax.Response String))
   request cbor =
     blockfrostPostRequest SubmitTransaction (MediaType "application/cbor")
-      (Just $ Affjax.arrayView $ unwrap $ unwrap cbor)
+      (Just $ Affjax.arrayView $ unwrap cbor)
 
-evaluateTx :: Transaction -> BlockfrostServiceM TxEvaluationR
-evaluateTx tx = do
-  cslTx <- liftEffect $ Serialization.convertTransaction tx
-  resp <- handleBlockfrostResponse <$> request (Serialization.toBytes cslTx)
+evaluateTx
+  :: Transaction -> AdditionalUtxoSet -> BlockfrostServiceM TxEvaluationR
+evaluateTx tx additionalUtxos = do
+  resp <- handleBlockfrostResponse <$> request
   case unwrapBlockfrostEvaluateTx <$> resp of
     Left err -> throwError $ error $ show err
     Right (Left err) ->
@@ -649,13 +653,15 @@ evaluateTx tx = do
         err
     Right (Right eval) -> pure eval
   where
-  -- Hex encoded, not binary like submission
-  request
-    :: CborBytes
-    -> BlockfrostServiceM (Either Affjax.Error (Affjax.Response String))
-  request cbor =
-    blockfrostPostRequest EvaluateTransaction (MediaType "application/cbor")
-      (Just $ Affjax.string $ cborBytesToHex cbor)
+  request :: BlockfrostServiceM (Either Affjax.Error (Affjax.Response String))
+  request = do
+    blockfrostPostRequest EvaluateTransaction MediaType.applicationJSON
+      ( Just $ Affjax.string $ stringifyAeson $
+          encodeAeson
+            { cbor: byteArrayToHex $ unwrap $ encodeCbor tx
+            , additionalUtxoSet: additionalUtxos
+            }
+      )
 
 --------------------------------------------------------------------------------
 -- Check transaction confirmation status
@@ -672,29 +678,85 @@ doesTxExist txHash = do
     Left e -> Left e
 
 --------------------------------------------------------------------------------
--- Get transaction metadata
---------------------------------------------------------------------------------
+-- Get transaction auxiliary data
+getTxAuxiliaryData
+  :: TransactionHash
+  -> BlockfrostServiceM (Either GetTxMetadataError AuxiliaryData)
+getTxAuxiliaryData txHash = runExceptT do
+  metadata <- ExceptT $ getMetadata
+  scriptRefs <- ExceptT $ getTxScripts txHash
+  pure $ wrap
+    { metadata: Just metadata
+    , nativeScripts: arrayToMaybe $ getNativeScripts scriptRefs
+    , plutusScripts: arrayToMaybe $ getPlutusScripts scriptRefs
+    }
+
+  where
+
+  getMetadata = do
+    response <- blockfrostGetRequest (TransactionMetadata txHash)
+    pure case unwrapBlockfrostMetadata <$> handleBlockfrostResponse response of
+      Left (ClientHttpResponseError (Affjax.StatusCode 404) _) ->
+        Left GetTxMetadataTxNotFoundError
+      Left e -> Left (GetTxMetadataClientError e)
+      Right metadata
+        | Map.isEmpty (unwrap metadata) ->
+            Left GetTxMetadataMetadataEmptyOrMissingError
+        | otherwise -> Right metadata
+
+  getNativeScripts :: Array ScriptRef -> Array NativeScript
+  getNativeScripts = catMaybes <<< map isNativeScript
+    where
+    isNativeScript (NativeScriptRef script) = Just script
+    isNativeScript (PlutusScriptRef _) = Nothing
+
+  getPlutusScripts :: Array ScriptRef -> Array PlutusScript
+  getPlutusScripts = catMaybes <<< map isPlutusScript
+    where
+    isPlutusScript (PlutusScriptRef script) = Just script
+    isPlutusScript (NativeScriptRef _) = Nothing
+
+  arrayToMaybe :: forall a. Array a -> Maybe (Array a)
+  arrayToMaybe [] = Nothing
+  arrayToMaybe xs = Just xs
 
 getTxMetadata
-  :: TransactionHash
+  :: Warn
+       ( Text
+           "deprecated: getTxMetadata. use Ctl.Internal.Service.Blockfrost.getTxAuxiliaryData"
+       )
+  => TransactionHash
   -> BlockfrostServiceM (Either GetTxMetadataError GeneralTransactionMetadata)
 getTxMetadata txHash = do
-  response <- blockfrostGetRequest (TransactionMetadata txHash)
-  pure case unwrapBlockfrostMetadata <$> handleBlockfrostResponse response of
-    Left (ClientHttpResponseError (Affjax.StatusCode 404) _) ->
-      Left GetTxMetadataTxNotFoundError
-    Left e ->
-      Left (GetTxMetadataClientError e)
-    Right metadata
-      | Map.isEmpty (unwrap metadata) ->
-          Left GetTxMetadataMetadataEmptyOrMissingError
-      | otherwise -> Right metadata
+  eAuxData <- getTxAuxiliaryData txHash
+  pure $ case eAuxData of
+    Left err -> Left err
+    Right auxiliaryData -> case (unwrap auxiliaryData).metadata of
+      Nothing -> Left GetTxMetadataMetadataEmptyOrMissingError
+      Just metadata -> Right metadata
+
+getTxScripts
+  :: TransactionHash
+  -> BlockfrostServiceM (Either GetTxMetadataError (Array ScriptRef))
+getTxScripts txHash = runExceptT do
+  (blockfrostUtxoMap :: BlockfrostUtxosOfTransaction) <- ExceptT $
+    blockfrostGetRequest (UtxosOfTransaction txHash)
+      <#> lmap GetTxMetadataClientError <<< handle404AsMempty <<<
+        handleBlockfrostResponse
+  let
+    (scriptHashes :: Array ScriptHash) = catMaybes
+      $ map (_.scriptHash <<< unwrap <<< snd)
+      $ unwrap blockfrostUtxoMap
+  catMaybes <$> traverse (ExceptT <<< scriptByHash) scriptHashes
+
+  where
+  scriptByHash t = (lmap GetTxMetadataClientError) <$> getScriptByHash t
 
 --------------------------------------------------------------------------------
 -- Get current epoch information
 --------------------------------------------------------------------------------
 
-getCurrentEpoch :: BlockfrostServiceM (Either ClientError BigInt)
+getCurrentEpoch :: BlockfrostServiceM (Either ClientError BigNum)
 getCurrentEpoch =
   blockfrostGetRequest LatestEpoch <#>
     handleBlockfrostResponse >>> map unwrapBlockfrostCurrentEpoch
@@ -871,14 +933,199 @@ instance DecodeAeson BlockfrostEvaluateTx where
     where
     success :: Either JsonDecodeError (Either Aeson TxEvaluationR)
     success = do
-      { result } :: { result :: TxEvaluationR } <- decodeAeson aeson
-      pure $ Right result
+      { result: BlockfrostTxEvaluationR res }
+        :: { result :: BlockfrostTxEvaluationR } <- decodeAeson aeson
+      pure $ Right res
 
     failure :: Either JsonDecodeError (Either Aeson TxEvaluationR)
     failure = pure $ Left aeson
 
 unwrapBlockfrostEvaluateTx :: BlockfrostEvaluateTx -> Either Aeson TxEvaluationR
 unwrapBlockfrostEvaluateTx (BlockfrostEvaluateTx ei) = ei
+
+--
+-- TxEvaluationR parsing
+--
+
+-- | Wrapper for Aeson parsing.
+--
+-- Blockfrost returns on evaluateTx endpoint an ogmios response from the older Ogmios v5.6!
+-- Ogmios backed parses against Ogmios v6, here we parse using the previous code for Ogmios.
+--
+-- Note: TxEvaluationFailure as part of BlockfrostTxEvaluation doesn't parse with it's DecodeAeson instance.
+newtype BlockfrostTxEvaluationR = BlockfrostTxEvaluationR TxEvaluationR
+
+instance DecodeAeson BlockfrostTxEvaluationR where
+  decodeAeson aeson = BlockfrostTxEvaluationR <$>
+    ( (wrap <<< Right <$> decodeBlockfrostTxEvaluationResult aeson) <|>
+        (wrap <<< Left <$> decodeBlockfrostTxEvaluationFailure aeson)
+    )
+
+decodeBlockfrostTxEvaluationResult
+  :: Aeson -> Either JsonDecodeError TxEvaluationResult
+decodeBlockfrostTxEvaluationResult = aesonObject $ \obj -> do
+  rdmrPtrExUnitsList :: Array (String /\ Aeson) <-
+    ForeignObject.toUnfoldable <$> getField obj "EvaluationResult"
+  TxEvaluationResult <<< Map.fromFoldable <$>
+    traverse decodeRdmrPtrExUnitsItem rdmrPtrExUnitsList
+  where
+  decodeRdmrPtrExUnitsItem
+    :: String /\ Aeson
+    -> Either JsonDecodeError (RedeemerPointer /\ ExecutionUnits)
+  decodeRdmrPtrExUnitsItem (redeemerPtrRaw /\ exUnitsAeson) = do
+    redeemerPtr <- decodeRedeemerPointer redeemerPtrRaw
+    flip aesonObject exUnitsAeson $ \exUnitsObj -> do
+      memory <- getField exUnitsObj "memory"
+      steps <- getField exUnitsObj "steps"
+      pure $ redeemerPtr /\ { memory, steps }
+
+decodeRedeemerPointer :: String -> Either JsonDecodeError RedeemerPointer
+decodeRedeemerPointer redeemerPtrRaw = note redeemerPtrTypeMismatch
+  case String.split (Pattern ":") redeemerPtrRaw of
+    [ tagRaw, indexRaw ] ->
+      { redeemerTag: _, redeemerIndex: _ }
+        <$> redeemerTagFromString tagRaw
+        <*> UInt.fromString indexRaw
+    _ -> Nothing
+
+redeemerTagFromString :: String -> Maybe RedeemerTag
+redeemerTagFromString = case _ of
+  "spend" -> Just RedeemerTag.Spend
+  "mint" -> Just RedeemerTag.Mint
+  "certificate" -> Just RedeemerTag.Cert
+  "withdrawal" -> Just RedeemerTag.Reward
+  _ -> Nothing
+
+redeemerPtrTypeMismatch :: JsonDecodeError
+redeemerPtrTypeMismatch = TypeMismatch
+  "Expected redeemer pointer to be encoded as: \
+  \^(spend|mint|certificate|withdrawal):[0-9]+$"
+
+data OldScriptFailure
+  = ExtraRedeemers (Array RedeemerPointer)
+  | MissingRequiredDatums
+      { provided :: Maybe (Array OgmiosDatum), missing :: Array OgmiosDatum }
+  | MissingRequiredScripts
+      { resolved :: Map RedeemerPointer OgmiosScript
+      , missing :: Array OgmiosScript
+      }
+  | ValidatorFailed { error :: String, traces :: Array String }
+  | UnknownInputReferencedByRedeemer OgmiosTxIn
+  | NonScriptInputReferencedByRedeemer OgmiosTxIn
+  | IllFormedExecutionBudget (Maybe ExecutionUnits)
+  | NoCostModelForLanguage String
+
+type ObjectParser = ReaderT (Object Aeson) (Either JsonDecodeError)
+
+liftField
+  :: forall (a :: Type) (b :: Type)
+   . DecodeAeson a
+  => String
+  -> (a -> Either JsonDecodeError b)
+  -> ObjectParser b
+liftField f act = ReaderT (flip getField f >=> act)
+
+instance DecodeAeson OldScriptFailure where
+  decodeAeson = aesonObject $ runReaderT cases
+    where
+    cases :: ObjectParser OldScriptFailure
+    cases = decodeExtraRedeemers
+      <|> decodeMissingRequiredDatums
+      <|> decodeMissingRequiredScripts
+      <|> decodeValidatorFailed
+      <|> decodeUnknownInputReferencedByRedeemer
+      <|> decodeNonScriptInputReferencedByRedeemer
+      <|> decodeIllFormedExecutionBudget
+      <|> decodeNoCostModelForLanguage
+      <|> defaultCase
+
+    defaultCase :: ObjectParser OldScriptFailure
+    defaultCase = ReaderT $ const $ Left $ TypeMismatch "Expected ScriptFailure"
+
+    decodeExtraRedeemers :: ObjectParser OldScriptFailure
+    decodeExtraRedeemers = ExtraRedeemers <$> liftField "extraRedeemers"
+      (traverse decodeRedeemerPointer)
+
+    decodeMissingRequiredDatums :: ObjectParser OldScriptFailure
+    decodeMissingRequiredDatums = liftField "missingRequiredDatums" \o -> do
+      pure $ MissingRequiredDatums o
+
+    decodeMissingRequiredScripts :: ObjectParser OldScriptFailure
+    decodeMissingRequiredScripts = liftField "missingRequiredScripts" \o -> do
+      resolvedKV <- ForeignObject.toUnfoldable <$> getField o "resolved"
+      resolved <- Map.fromFoldable <$> for (resolvedKV :: Array _)
+        \(k /\ v) -> (_ /\ v) <$> decodeRedeemerPointer k
+      missing <- getField o "missing"
+      pure $ MissingRequiredScripts { resolved, missing }
+
+    decodeValidatorFailed :: ObjectParser OldScriptFailure
+    decodeValidatorFailed = liftField "validatorFailed" \o -> do
+      pure $ ValidatorFailed o
+
+    decodeUnknownInputReferencedByRedeemer :: ObjectParser OldScriptFailure
+    decodeUnknownInputReferencedByRedeemer = liftField
+      "unknownInputReferencedByRedeemer"
+      \o -> do
+        pure $ UnknownInputReferencedByRedeemer o
+
+    decodeNonScriptInputReferencedByRedeemer :: ObjectParser OldScriptFailure
+    decodeNonScriptInputReferencedByRedeemer = liftField
+      "nonScriptInputReferencedByRedeemer"
+      \o -> do
+        pure $ NonScriptInputReferencedByRedeemer o
+
+    decodeIllFormedExecutionBudget :: ObjectParser OldScriptFailure
+    decodeIllFormedExecutionBudget = liftField "illFormedExecutionBudget" \o ->
+      do
+        pure $ IllFormedExecutionBudget o
+
+    decodeNoCostModelForLanguage :: ObjectParser OldScriptFailure
+    decodeNoCostModelForLanguage = liftField "noCostModelForLanguage" \o -> do
+      pure $ NoCostModelForLanguage o
+
+decodeBlockfrostTxEvaluationFailure
+  :: Aeson -> Either JsonDecodeError TxEvaluationFailure
+decodeBlockfrostTxEvaluationFailure = aesonObject $ runReaderT cases
+  where
+  cases :: ObjectParser TxEvaluationFailure
+  cases = decodeScriptFailures <|> defaultCase
+
+  defaultCase :: ObjectParser TxEvaluationFailure
+  defaultCase = ReaderT \o ->
+    pure (UnparsedError (stringifyAeson (encodeAeson o)))
+
+  -- translate Ogmios v5.6 ScriptFailures to Ogmios v6
+  translateOldToNew :: OldScriptFailure -> Either JsonDecodeError ScriptFailure
+  translateOldToNew x = case x of
+    ExtraRedeemers ptrs -> pure $ TxEvaluation.ExtraRedeemers ptrs
+    MissingRequiredDatums { provided, missing } -> pure $
+      TxEvaluation.MissingRequiredDatums { missing, provided: provided }
+    MissingRequiredScripts { resolved: resolved0, missing: missing0 } -> do
+      missing <- traverse decodeRedeemerPointer missing0
+      resolved :: Map RedeemerPointer ScriptHash <- traverse decodeAeson
+        (map (encodeAeson :: String -> _) resolved0)
+      pure $ TxEvaluation.MissingRequiredScripts
+        { missing, resolved: Just resolved }
+    ValidatorFailed { error, traces } -> pure $ TxEvaluation.ValidatorFailed
+      { error, traces }
+    UnknownInputReferencedByRedeemer txin -> pure $
+      TxEvaluation.UnknownInputReferencedByRedeemer [ txin ]
+    NonScriptInputReferencedByRedeemer txin -> pure $
+      TxEvaluation.NonScriptInputReferencedByRedeemer txin
+    IllFormedExecutionBudget mexu -> pure $
+      TxEvaluation.IllFormedExecutionBudget mexu
+    NoCostModelForLanguage lang -> pure $ TxEvaluation.NoCostModelForLanguage
+      [ lang ]
+
+  decodeScriptFailures :: ObjectParser TxEvaluationFailure
+  decodeScriptFailures = ReaderT \o -> do
+    scriptFailuresKV <- ForeignObject.toUnfoldable
+      <$> (getField o "EvaluationFailure" >>= flip getField "ScriptFailures")
+    scriptFailures <- Map.fromFoldable <$> for (scriptFailuresKV :: Array _)
+      \(k /\ v) -> do
+        v' <- traverse translateOldToNew =<< decodeAeson v
+        (_ /\ v') <$> decodeRedeemerPointer k
+    pure $ ScriptFailures scriptFailures
 
 --------------------------------------------------------------------------------
 -- BlockfrostUtxosAtAddress / BlockfrostUtxosOfTransaction
@@ -939,15 +1186,24 @@ instance Show BlockfrostUtxosOfTransaction where
 instance DecodeAeson BlockfrostUtxosOfTransaction where
   decodeAeson = aesonObject \obj -> do
     txHash <- getField obj "hash"
-    getField obj "outputs"
-      >>= aesonArray (map wrap <<< traverse (decodeUtxoEntry txHash))
+    outputs <- getField obj "outputs"
+    aesonArray (map (wrap <<< catMaybes) <<< traverse (decodeUtxoEntry txHash))
+      outputs
     where
     decodeUtxoEntry
       :: TransactionHash
       -> Aeson
-      -> Either JsonDecodeError BlockfrostUnspentOutput
-    decodeUtxoEntry txHash utxoAeson =
-      Tuple <$> decodeTxOref txHash utxoAeson <*> decodeAeson utxoAeson
+      -> Either JsonDecodeError (Maybe BlockfrostUnspentOutput)
+    decodeUtxoEntry txHash utxoAeson = do
+      (consumedByTx :: Maybe String) <- aesonObject
+        (flip getFieldOptional' "consumed_by_tx")
+        utxoAeson
+      case consumedByTx of
+        Nothing ->
+          Just <$>
+            (Tuple <$> decodeTxOref txHash utxoAeson <*> decodeAeson utxoAeson)
+        Just _ ->
+          pure Nothing
 
     decodeTxOref
       :: TransactionHash -> Aeson -> Either JsonDecodeError TransactionInput
@@ -962,7 +1218,7 @@ instance DecodeAeson BlockfrostUtxosOfTransaction where
 newtype BlockfrostTransactionOutput = BlockfrostTransactionOutput
   { address :: Address
   , amount :: Value
-  , datum :: OutputDatum
+  , datum :: Maybe OutputDatum
   , scriptHash :: Maybe ScriptHash
   }
 
@@ -984,34 +1240,39 @@ instance DecodeAeson BlockfrostTransactionOutput where
     decodeAddress obj =
       getField obj "address" >>= \address ->
         note (TypeMismatch "Expected bech32 encoded address")
-          (addressFromBech32 address)
+          (Address.fromBech32 address)
 
     decodeValue :: Object Aeson -> Either JsonDecodeError Value
     decodeValue =
-      flip getField "amount" >=> aesonArray (map fold <<< traverse decodeAsset)
+      flip getField "amount"
+        >=> aesonArray (traverse decodeAsset)
+        >=>
+          Value.sum >>> note (TypeMismatch "Value")
       where
+
       decodeAsset :: Aeson -> Either JsonDecodeError Value
       decodeAsset = aesonObject \obj -> do
         quantity <-
           getField obj "quantity" >>=
-            BigInt.fromString >>>
+            BigNum.fromString >>>
               note (TypeMismatch "Expected string repr of BigInt")
         getField obj "unit" >>= case _ of
           "lovelace" -> pure $ Value.lovelaceValueOf quantity
           assetString -> do
             let { before: csStr, after: tnStr } = String.splitAt 56 assetString
             decodeAssetClass assetString csStr tnStr <#> \(cs /\ tn) ->
-              Value.mkValue mempty $ Value.mkSingletonNonAdaAsset cs tn quantity
+              Value.assetToValue (AssetClass cs tn) quantity
 
-    decodeOutputDatum :: Object Aeson -> Either JsonDecodeError OutputDatum
+    decodeOutputDatum
+      :: Object Aeson -> Either JsonDecodeError (Maybe OutputDatum)
     decodeOutputDatum obj =
       getFieldOptional' obj "inline_datum" >>= case _ of
         Just datum ->
-          note (TypeMismatch "Expected CBOR encoded inline datum")
-            (OutputDatum <$> deserializeData datum)
+          note (TypeMismatch "OutputDatum")
+            (Just <<< OutputDatum <$> decodeCbor datum)
         Nothing ->
-          maybe NoOutputDatum OutputDatumHash
-            <$> getFieldOptional' obj "data_hash"
+          pure $ join $ map OutputDatumHash <$> hush
+            (getFieldOptional' obj "data_hash")
 
 resolveBlockfrostTxOutput
   :: BlockfrostTransactionOutput
@@ -1098,7 +1359,7 @@ instance DecodeAeson BlockfrostNativeScript where
       "sig" ->
         ScriptPubkey <$>
           ( getField obj "keyHash" >>=
-              (note (TypeMismatch "Ed25519KeyHash") <<< ed25519KeyHashFromBytes)
+              (note (TypeMismatch "Ed25519KeyHash") <<< decodeCbor)
           )
       "before" ->
         TimelockExpiry <$> getField obj "slot"
@@ -1143,7 +1404,7 @@ instance DecodeAeson BlockfrostCbor where
 -- BlockfrostDatum
 --------------------------------------------------------------------------------
 
-newtype BlockfrostDatum = BlockfrostDatum (Maybe Datum)
+newtype BlockfrostDatum = BlockfrostDatum (Maybe PlutusData)
 
 derive instance Generic BlockfrostDatum _
 derive instance Newtype BlockfrostDatum _
@@ -1151,7 +1412,7 @@ derive instance Newtype BlockfrostDatum _
 instance Show BlockfrostDatum where
   show = genericShow
 
-unwrapBlockfrostDatum :: BlockfrostDatum -> Maybe Datum
+unwrapBlockfrostDatum :: BlockfrostDatum -> Maybe PlutusData
 unwrapBlockfrostDatum = unwrap
 
 instance DecodeAeson BlockfrostDatum where
@@ -1159,7 +1420,7 @@ instance DecodeAeson BlockfrostDatum where
     | isNull aeson = pure $ BlockfrostDatum Nothing
     | otherwise = do
         cbor <- aesonObject (flip getFieldOptional "cbor") aeson
-        pure $ BlockfrostDatum $ deserializeData =<< cbor
+        pure $ BlockfrostDatum $ decodeCbor =<< cbor
 
 --------------------------------------------------------------------------------
 -- BlockfrostMetadata
@@ -1178,12 +1439,10 @@ instance DecodeAeson BlockfrostMetadata where
   decodeAeson = decodeAeson >=>
     \(metadatas :: Array { metadata :: CborBytes }) -> do
       metadatas' <- for metadatas \{ metadata } -> do
-        map (unwrap <<< convertGeneralTransactionMetadata) <$> flip note
-          (fromBytes metadata) $
-          TypeMismatch "Hexadecimal encoded Metadata"
-
-      pure $ BlockfrostMetadata $ GeneralTransactionMetadata $ Map.unions
-        metadatas'
+        decodeCbor metadata # note
+          (TypeMismatch "Hexadecimal encoded Metadata")
+      note (TypeMismatch "GeneralTransactionMetadata") $
+        BlockfrostMetadata <$> GeneralTransactionMetadata.fold metadatas'
 
 unwrapBlockfrostMetadata :: BlockfrostMetadata -> GeneralTransactionMetadata
 unwrapBlockfrostMetadata (BlockfrostMetadata metadata) = metadata
@@ -1192,7 +1451,7 @@ unwrapBlockfrostMetadata (BlockfrostMetadata metadata) = metadata
 -- BlockfrostCurrentEpoch
 --------------------------------------------------------------------------------
 
-newtype BlockfrostCurrentEpoch = BlockfrostCurrentEpoch BigInt
+newtype BlockfrostCurrentEpoch = BlockfrostCurrentEpoch BigNum
 
 derive instance Generic BlockfrostCurrentEpoch _
 derive instance Newtype BlockfrostCurrentEpoch _
@@ -1202,9 +1461,9 @@ instance Show BlockfrostCurrentEpoch where
 
 instance DecodeAeson BlockfrostCurrentEpoch where
   decodeAeson a = decodeAeson a <#>
-    \({ epoch } :: { epoch :: BigInt }) -> wrap epoch
+    \({ epoch } :: { epoch :: BigNum }) -> wrap epoch
 
-unwrapBlockfrostCurrentEpoch :: BlockfrostCurrentEpoch -> BigInt
+unwrapBlockfrostCurrentEpoch :: BlockfrostCurrentEpoch -> BigNum
 unwrapBlockfrostCurrentEpoch = unwrap
 
 data BlockfrostStakeCredential = BlockfrostStakeCredential NetworkId
@@ -1221,17 +1480,21 @@ instance Show BlockfrostStakeCredential where
 blockfrostStakeCredentialToBech32 :: BlockfrostStakeCredential -> Bech32String
 blockfrostStakeCredentialToBech32 = case _ of
   BlockfrostStakeCredential networkId (Left stakePubKeyHash) ->
-    rewardAddressToBech32 $ stakePubKeyHashRewardAddress networkId
-      stakePubKeyHash
+    RewardAddress.toBech32 $
+      { networkId
+      , stakeCredential: wrap $ PubKeyHashCredential $ unwrap stakePubKeyHash
+      }
   BlockfrostStakeCredential networkId (Right stakeValidatorHash) ->
-    rewardAddressToBech32 $ stakeValidatorHashRewardAddress networkId
-      stakeValidatorHash
+    RewardAddress.toBech32 $
+      { networkId
+      , stakeCredential: wrap $ ScriptHashCredential $ unwrap stakeValidatorHash
+      }
 
 --------------------------------------------------------------------------------
 -- BlockfrostProtocolParameters
 --------------------------------------------------------------------------------
 
--- | `Stringed a` decodes an `a` who was encoded as a `String`
+-- | `Stringed a` decodes an `a` that was encoded as a `String`
 newtype Stringed a = Stringed a
 
 derive instance Newtype (Stringed a) _
@@ -1239,48 +1502,62 @@ derive instance Newtype (Stringed a) _
 instance DecodeAeson a => DecodeAeson (Stringed a) where
   decodeAeson = decodeAeson >=> decodeJsonString >=> Stringed >>> pure
 
+newtype FiniteBigNumber = FiniteBigNumber BigNumber
+
+derive instance Newtype FiniteBigNumber _
+
+instance DecodeAeson FiniteBigNumber where
+  decodeAeson aeson = do
+    number <- decodeAeson aeson
+    map FiniteBigNumber $ note (TypeMismatch "BigNumber") $ hush
+      $ BigNumber.parseBigNumber
+      $ show (number :: Number)
+
 type BlockfrostProtocolParametersRaw =
   { "min_fee_a" :: UInt
   , "min_fee_b" :: UInt
   , "max_block_size" :: UInt
   , "max_tx_size" :: UInt
   , "max_block_header_size" :: UInt
-  , "key_deposit" :: Stringed BigInt
-  , "pool_deposit" :: Stringed BigInt
-  , "e_max" :: BigInt
+  , "key_deposit" :: Stringed BigNum
+  , "pool_deposit" :: Stringed BigNum
+  , "e_max" :: UInt
   , "n_opt" :: UInt
-  , "a0" :: Finite BigNumber
-  , "rho" :: Finite BigNumber
-  , "tau" :: Finite BigNumber
+  , "a0" :: FiniteBigNumber
+  , "rho" :: FiniteBigNumber
+  , "tau" :: FiniteBigNumber
   , "protocol_major_ver" :: UInt
   , "protocol_minor_ver" :: UInt
-  , "min_pool_cost" :: Stringed BigInt
+  , "min_pool_cost" :: Stringed BigNum
   , "cost_models" ::
       { "PlutusV1" :: { | CostModelV1 }
       , "PlutusV2" :: { | CostModelV2 }
+      , "PlutusV3" :: Object Cardano.Int
       }
-  , "price_mem" :: Finite BigNumber
-  , "price_step" :: Finite BigNumber
-  , "max_tx_ex_mem" :: Stringed BigInt
-  , "max_tx_ex_steps" :: Stringed BigInt
-  , "max_block_ex_mem" :: Stringed BigInt
-  , "max_block_ex_steps" :: Stringed BigInt
+  , "price_mem" :: FiniteBigNumber
+  , "price_step" :: FiniteBigNumber
+  , "max_tx_ex_mem" :: Stringed BigNum
+  , "max_tx_ex_steps" :: Stringed BigNum
+  , "max_block_ex_mem" :: Stringed BigNum
+  , "max_block_ex_steps" :: Stringed BigNum
   , "max_val_size" :: Stringed UInt
   , "collateral_percent" :: UInt
   , "max_collateral_inputs" :: UInt
-  , "coins_per_utxo_size" :: Maybe (Stringed BigInt)
-  , "coins_per_utxo_word" :: Maybe (Stringed BigInt)
+  , "coins_per_utxo_size" :: Maybe (Stringed BigNum)
+  , "gov_action_deposit" :: Stringed BigNum
+  , "drep_deposit" :: Stringed BigNum
+  , "min_fee_ref_script_cost_per_byte" :: UInt
   }
 
-toFraction' :: Finite BigNumber -> String /\ String
+toFraction' :: BigNumber -> String /\ String
 toFraction' bn =
   (BigNumber.toString numerator /\ BigNumber.toString denominator)
   where
-  (numerator /\ denominator) = toFraction (unpackFinite bn)
+  (numerator /\ denominator) = toFraction bn
     (BigNumber.fromNumber infinity)
 
-bigNumberToRational :: Finite BigNumber -> Either JsonDecodeError Rational
-bigNumberToRational bn = note (TypeMismatch "Rational") do
+bigNumberToRational :: FiniteBigNumber -> Either JsonDecodeError Rational
+bigNumberToRational (FiniteBigNumber bn) = note (TypeMismatch "Rational") do
   numerator <- BigInt.fromString numerator'
   denominator <- BigInt.fromString denominator'
   reduce numerator denominator
@@ -1288,12 +1565,12 @@ bigNumberToRational bn = note (TypeMismatch "Rational") do
   (numerator' /\ denominator') = toFraction' bn
 
 bigNumberToPrice
-  :: Finite BigNumber
-  -> Either JsonDecodeError { numerator :: BigNum, denominator :: BigNum }
-bigNumberToPrice bn = note (TypeMismatch "Rational") do
+  :: FiniteBigNumber
+  -> Either JsonDecodeError UnitInterval
+bigNumberToPrice (FiniteBigNumber bn) = note (TypeMismatch "Rational") do
   numerator <- BigNum.fromString numerator'
   denominator <- BigNum.fromString denominator'
-  pure { numerator, denominator }
+  pure $ UnitInterval { numerator, denominator }
   where
   (numerator' /\ denominator') = toFraction' bn
 
@@ -1317,24 +1594,33 @@ instance DecodeAeson BlockfrostProtocolParameters where
     treasuryCut <- bigNumberToRational raw.tau
     memPrice <- bigNumberToPrice raw.price_mem
     stepPrice <- bigNumberToPrice raw.price_step
-    let prices = { memPrice, stepPrice }
+    let prices = ExUnitPrices { memPrice, stepPrice }
 
-    coinsPerUtxoUnit <-
-      maybe
-        (Left $ AtKey "coinsPerUtxoByte or coinsPerUtxoWord" $ MissingValue)
-        pure
-        $ (CoinsPerUtxoByte <<< Coin <<< unwrap <$> raw.coins_per_utxo_size) <|>
-            (CoinsPerUtxoWord <<< Coin <<< unwrap <$> raw.coins_per_utxo_word)
+    coinsPerUtxoByte <-
+      maybe (Left $ AtKey "coins_per_utxo_size" $ MissingValue)
+        pure $ (Coin <<< unwrap <$> raw.coins_per_utxo_size)
 
+    refScriptCoinsPerByte <-
+      note (AtKey "min_fee_ref_script_cost_per_byte" $ TypeMismatch "Integer") $
+        Rational.reduce
+          ( BigNum.toBigInt $ BigNum.fromUInt
+              raw.min_fee_ref_script_cost_per_byte
+          )
+          one
+    let plutusV3CostModelRaw = raw.cost_models."PlutusV3"
+    plutusV3CostModel <-
+      note (AtKey "cost_models" $ AtKey "PlutusV3" $ TypeMismatch "CostModel")
+        ( convertPlutusV3CostModel plutusV3CostModelRaw
+            <|> convertUnnamedPlutusCostModel plutusV3CostModelRaw
+        )
     pure $ BlockfrostProtocolParameters $ ProtocolParameters
       { protocolVersion: raw.protocol_major_ver /\ raw.protocol_minor_ver
       -- The following two parameters were removed from Babbage
       , decentralization: zero
-      , extraPraosEntropy: Nothing
       , maxBlockHeaderSize: raw.max_block_header_size
       , maxBlockBodySize: raw.max_block_size
       , maxTxSize: raw.max_tx_size
-      , txFeeFixed: raw.min_fee_b
+      , txFeeFixed: Coin $ BigNum.fromUInt raw.min_fee_b
       , txFeePerByte: raw.min_fee_a
       , stakeAddressDeposit: Coin $ unwrap raw.key_deposit
       , stakePoolDeposit: Coin $ unwrap raw.pool_deposit
@@ -1344,23 +1630,29 @@ instance DecodeAeson BlockfrostProtocolParameters where
       , poolPledgeInfluence
       , monetaryExpansion
       , treasuryCut
-      , coinsPerUtxoUnit: coinsPerUtxoUnit
-      , costModels: Costmdls $ Map.fromFoldable
+      , coinsPerUtxoByte: coinsPerUtxoByte
+      , costModels: Map.fromFoldable
           [ PlutusV1 /\ convertPlutusV1CostModel raw.cost_models."PlutusV1"
           , PlutusV2 /\ convertPlutusV2CostModel raw.cost_models."PlutusV2"
+          , PlutusV3 /\ plutusV3CostModel
           ]
       , prices
       , maxTxExUnits:
-          { mem: unwrap raw.max_tx_ex_mem
-          , steps: unwrap raw.max_tx_ex_steps
-          }
+          ExUnits
+            { mem: unwrap raw.max_tx_ex_mem
+            , steps: unwrap raw.max_tx_ex_steps
+            }
       , maxBlockExUnits:
-          { mem: unwrap raw.max_block_ex_mem
-          , steps: unwrap raw.max_block_ex_steps
-          }
+          ExUnits
+            { mem: unwrap raw.max_block_ex_mem
+            , steps: unwrap raw.max_block_ex_steps
+            }
       , maxValueSize: unwrap raw.max_val_size
       , collateralPercent: raw.collateral_percent
       , maxCollateralInputs: raw.max_collateral_inputs
+      , govActionDeposit: Coin $ unwrap raw.gov_action_deposit
+      , drepDeposit: Coin $ unwrap raw.drep_deposit
+      , refScriptCoinsPerByte
       }
 
 --------------------------------------------------------------------------------
@@ -1379,7 +1671,7 @@ instance DecodeAeson BlockfrostRewards where
     withdrawable_amount_mb_str <- obj .:! "withdrawable_amount"
     withdrawable_amount <- for withdrawable_amount_mb_str
       \withdrawable_amount_str ->
-        note (TypeMismatch "BigInt") $ map Coin $ BigInt.fromString
+        note (TypeMismatch "BigNum") $ map Coin $ BigNum.fromString
           withdrawable_amount_str
     pure $ BlockfrostRewards
       { pool_id

@@ -4,6 +4,7 @@ module Ctl.Internal.ServerConfig
   , blockfrostPublicMainnetServerConfig
   , blockfrostPublicPreprodServerConfig
   , blockfrostPublicPreviewServerConfig
+  , blockfrostPublicSanchonetServerConfig
   , blockfrostSelfHostedServerConfig
   , defaultKupoServerConfig
   , defaultOgmiosWsConfig
@@ -15,7 +16,6 @@ module Ctl.Internal.ServerConfig
 import Prelude
 
 import Ctl.Internal.Helpers ((<</>>))
-import Ctl.Internal.JsWebSocket (Url)
 import Data.Maybe (Maybe(Just, Nothing), fromMaybe)
 import Data.UInt (UInt)
 import Data.UInt as UInt
@@ -61,6 +61,14 @@ blockfrostPublicPreprodServerConfig =
   , path: Just "/api/v0"
   }
 
+blockfrostPublicSanchonetServerConfig :: ServerConfig
+blockfrostPublicSanchonetServerConfig =
+  { port: UInt.fromInt 443
+  , host: "cardano-sanchonet.blockfrost.io"
+  , secure: true
+  , path: Just "/api/v0"
+  }
+
 blockfrostPublicMainnetServerConfig :: ServerConfig
 blockfrostPublicMainnetServerConfig =
   { port: UInt.fromInt 443
@@ -76,6 +84,8 @@ blockfrostSelfHostedServerConfig =
   , secure: false
   , path: Just ""
   }
+
+type Url = String
 
 mkHttpUrl :: ServerConfig -> Url
 mkHttpUrl = mkServerUrl "http"

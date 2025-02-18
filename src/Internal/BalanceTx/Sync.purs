@@ -12,19 +12,23 @@ module Ctl.Internal.BalanceTx.Sync
 
 import Prelude
 
+import Cardano.Serialization.Lib (toBytes)
+import Cardano.Types
+  ( TransactionHash
+  , TransactionInput
+  , TransactionOutput
+  , TransactionUnspentOutput
+  , UtxoMap
+  )
+import Cardano.Types.Address (Address)
 import Contract.Log (logError', logTrace', logWarn')
 import Contract.Monad (Contract, liftedE)
 import Control.Monad.Reader (local)
 import Control.Monad.Reader.Class (asks)
 import Control.Parallel (parOneOf, parTraverse, parallel, sequential)
-import Ctl.Internal.Cardano.Types.Transaction (UtxoMap)
-import Ctl.Internal.Cardano.Types.Transaction as Cardano
-import Ctl.Internal.Cardano.Types.TransactionUnspentOutput
-  ( TransactionUnspentOutput
-  )
 import Ctl.Internal.Contract.Monad
   ( ContractSynchronizationParams
-  , getQueryHandle
+  , getProvider
   )
 import Ctl.Internal.Contract.Wallet
   ( getChangeAddress
@@ -34,14 +38,12 @@ import Ctl.Internal.Contract.Wallet
   , getWalletUtxos
   )
 import Ctl.Internal.Helpers (liftEither, liftedM)
-import Ctl.Internal.Serialization.Address (Address)
-import Ctl.Internal.Types.ByteArray (byteArrayToHex)
-import Ctl.Internal.Types.Transaction (TransactionHash, TransactionInput)
-import Ctl.Internal.Wallet (cip30Wallet)
+import Ctl.Internal.Wallet (Wallet(GenericCip30))
 import Data.Array as Array
 import Data.Bifunctor (bimap)
+import Data.ByteArray (byteArrayToHex)
 import Data.Map as Map
-import Data.Maybe (Maybe, fromMaybe, isJust, maybe)
+import Data.Maybe (Maybe(Just), fromMaybe, isJust, maybe)
 import Data.Monoid (guard)
 import Data.Newtype (unwrap)
 import Data.Set (Set)
@@ -133,7 +135,7 @@ syncWalletWithTransaction txHash = whenM isCip30Wallet do
       <> " in use in the wallet. Consider increasing "
       <> "`timeParams.syncWallet.timeout` in `ContractParams`. "
       <> "See `doc/query-layers.md` for more info."
-  queryHandle <- getQueryHandle
+  provider <- getProvider
   let
     sync :: Contract Unit
     sync = do
@@ -147,7 +149,7 @@ syncWalletWithTransaction txHash = whenM isCip30Wallet do
         logTrace' $
           "syncWalletWithTransaction: waiting for wallet state synchronization "
             <> "with the query layer, querying for Tx: "
-            <> byteArrayToHex (unwrap txHash)
+            <> byteArrayToHex (toBytes $ unwrap txHash)
         liftAff (delay delayMs)
         sync
   -- Collect all the addresses controlled by the wallet
@@ -155,7 +157,7 @@ syncWalletWithTransaction txHash = whenM isCip30Wallet do
   ownAddresses /\ outputAddresses <- sequential do
     Tuple <$> parallel getControlledAddresses <*> parallel do
       liftAff $ liftEither =<< do
-        queryHandle.getOutputAddressesByTxHash txHash <#>
+        provider.getOutputAddressesByTxHash txHash <#>
           bimap (error <<< show) Set.fromFoldable
   if Set.isEmpty (Set.intersection ownAddresses outputAddresses) then do
     logWarn' $ "syncWalletWithTransaction: "
@@ -245,10 +247,10 @@ disabledSynchronizationParams =
   }
 
 -- | A version without plutus conversion for internal use.
-getUtxo' :: TransactionInput -> Contract (Maybe Cardano.TransactionOutput)
+getUtxo' :: TransactionInput -> Contract (Maybe TransactionOutput)
 getUtxo' oref = do
-  queryHandle <- getQueryHandle
-  liftedE $ liftAff $ queryHandle.getUtxoByOref oref
+  provider <- getProvider
+  liftedE $ liftAff $ provider.getUtxoByOref oref
 
 -- | Get all addresses contolled by a wallet:
 -- | `getUsedAddresses`, `getUnusedAddresses` and `getChangeAddress` combined.
@@ -258,7 +260,7 @@ getControlledAddresses = do
   sequential $ combine
     <$> parallel (getWalletAddresses <#> Set.fromFoldable)
     <*> parallel (getUnusedAddresses <#> Set.fromFoldable)
-    <*> parallel (getChangeAddress <#> Set.fromFoldable)
+    <*> parallel (getChangeAddress <#> Set.singleton)
   where
   combine used unused change = used `Set.union` unused `Set.union` change
 
@@ -273,7 +275,9 @@ getControlledUtxos = do
     (unwrap >>> \({ input, output }) -> input /\ output)
 
 isCip30Wallet :: Contract Boolean
-isCip30Wallet = asks $ isJust <<< (cip30Wallet <=< _.wallet)
+isCip30Wallet = asks $ _.wallet >>> case _ of
+  Just (GenericCip30 _) -> true
+  _ -> false
 
 -- | If the first argument is true, it will throw. Otherwise, that would be a
 -- | console.error call.

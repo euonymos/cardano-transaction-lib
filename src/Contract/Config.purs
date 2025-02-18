@@ -1,33 +1,24 @@
 -- | Exposes some pre-defined Contract configurations. Re-exports all modules needed to modify `ContractParams`.
 module Contract.Config
   ( testnetConfig
-  , testnetNamiConfig
-  , testnetGeroConfig
-  , testnetFlintConfig
-  , testnetEternlConfig
-  , testnetLodeConfig
-  , testnetNuFiConfig
   , mainnetConfig
-  , mainnetNamiConfig
-  , mainnetGeroConfig
-  , mainnetFlintConfig
-  , mainnetEternlConfig
-  , mainnetLodeConfig
-  , mainnetNuFiConfig
   , defaultSynchronizationParams
   , strictSynchronizationParams
+  , softSynchronizationParams
   , defaultTimeParams
-  , module Contract.Address
   , module Data.Log.Level
   , module Data.Log.Message
-  , module Ctl.Internal.Deserialization.Keys
   , module Ctl.Internal.ServerConfig
   , module Ctl.Internal.Wallet.Spec
-  , module Ctl.Internal.Wallet.Key
+  , module Cardano.Wallet.Key
   , module X
   ) where
 
-import Contract.Address (NetworkId(MainnetId, TestnetId))
+import Cardano.Types (NetworkId(MainnetId, TestnetId))
+import Cardano.Wallet.Key
+  ( PrivatePaymentKey(PrivatePaymentKey)
+  , PrivateStakeKey(PrivateStakeKey)
+  )
 import Ctl.Internal.BalanceTx.Sync
   ( disabledSynchronizationParams
   ) as X
@@ -43,12 +34,12 @@ import Ctl.Internal.Contract.Monad
   , ContractSynchronizationParams
   , ContractTimeParams
   ) as X
-import Ctl.Internal.Contract.QueryBackend
+import Ctl.Internal.Contract.ProviderBackend
   ( BlockfrostBackendParams
   , CtlBackend
   , CtlBackendParams
-  , QueryBackend(BlockfrostBackend, CtlBackend)
-  , QueryBackendParams(BlockfrostBackendParams, CtlBackendParams)
+  , ProviderBackend(BlockfrostBackend, CtlBackend)
+  , ProviderBackendParams(BlockfrostBackendParams, CtlBackendParams)
   , defaultConfirmTxDelay
   , getBlockfrostBackend
   , getCtlBackend
@@ -56,8 +47,7 @@ import Ctl.Internal.Contract.QueryBackend
   , mkCtlBackendParams
   , mkSelfHostedBlockfrostBackendParams
   ) as X
-import Ctl.Internal.Contract.QueryBackend (mkCtlBackendParams)
-import Ctl.Internal.Deserialization.Keys (privateKeyFromBytes)
+import Ctl.Internal.Contract.ProviderBackend (mkCtlBackendParams)
 import Ctl.Internal.ServerConfig
   ( Host
   , ServerConfig
@@ -68,26 +58,19 @@ import Ctl.Internal.ServerConfig
   , defaultKupoServerConfig
   , defaultOgmiosWsConfig
   )
-import Ctl.Internal.Wallet.Key
-  ( PrivatePaymentKey(PrivatePaymentKey)
-  , PrivateStakeKey(PrivateStakeKey)
-  )
 import Ctl.Internal.Wallet.Spec
-  ( PrivatePaymentKeySource(PrivatePaymentKeyFile, PrivatePaymentKeyValue)
+  ( Cip1852DerivationPath
+  , KnownWallet(Nami, Gero, Flint, Eternl, Lode, Lace, NuFi)
+  , MnemonicSource(MnemonicString, MnemonicFile)
+  , PrivatePaymentKeySource(PrivatePaymentKeyFile, PrivatePaymentKeyValue)
   , PrivateStakeKeySource(PrivateStakeKeyFile, PrivateStakeKeyValue)
-  , WalletSpec
-      ( UseKeys
-      , ConnectToNami
-      , ConnectToGero
-      , ConnectToFlint
-      , ConnectToEternl
-      , ConnectToLode
-      , ConnectToNuFi
-      )
+  , StakeKeyPresence(WithStakeKey, WithoutStakeKey)
+  , WalletSpec(UseKeys, UseMnemonic, ConnectToGenericCip30)
+  , walletName
   )
 import Data.Log.Level (LogLevel(Trace, Debug, Info, Warn, Error))
 import Data.Log.Message (Message)
-import Data.Maybe (Maybe(Just, Nothing))
+import Data.Maybe (Maybe(Nothing))
 import Data.Number (infinity)
 import Data.Time.Duration (Milliseconds(Milliseconds), Seconds(Seconds))
 
@@ -106,6 +89,9 @@ testnetConfig =
   , timeParams: defaultTimeParams
   , synchronizationParams: defaultSynchronizationParams
   }
+
+mainnetConfig :: ContractParams
+mainnetConfig = testnetConfig { networkId = MainnetId }
 
 -- | - `syncWallet` specifies delay and timeout for `syncWalletWithTransaction`
 -- | and `syncWalletWithTxInputs` synchronization primitives.
@@ -131,11 +117,25 @@ defaultTimeParams =
   , waitUntilSlot: { delay: Milliseconds 1_000.0 }
   }
 
--- | Default synchronization parameters with all synchronization primitives
--- | enabled. `errorOnTimeout` options are all set to `false`.
+-- | Default synchronization parameters with all synchronizations
+-- | disabled.
 -- | See `doc/query-layers.md` for more info.
 defaultSynchronizationParams :: ContractSynchronizationParams
 defaultSynchronizationParams =
+  { syncBackendWithWallet:
+      { errorOnTimeout: false
+      , beforeCip30Methods: false
+      , beforeBalancing: false
+      }
+  , syncWalletWithTxInputs: { errorOnTimeout: false, beforeCip30Sign: false }
+  , syncWalletWithTransaction:
+      { errorOnTimeout: false, beforeTxConfirmed: false }
+  }
+
+-- | Attempt to synchronize, but do not throw an exception on failure. Used to be the default option in CTL up to and including v8.
+-- | See `doc/query-layers.md` for more info.
+softSynchronizationParams :: ContractSynchronizationParams
+softSynchronizationParams =
   { syncBackendWithWallet:
       { errorOnTimeout: false, beforeCip30Methods: true, beforeBalancing: true }
   , syncWalletWithTxInputs: { errorOnTimeout: false, beforeCip30Sign: true }
@@ -153,42 +153,3 @@ strictSynchronizationParams =
   , syncWalletWithTxInputs: { errorOnTimeout: true, beforeCip30Sign: true }
   , syncWalletWithTransaction: { errorOnTimeout: true, beforeTxConfirmed: true }
   }
-
-testnetNamiConfig :: ContractParams
-testnetNamiConfig = testnetConfig { walletSpec = Just ConnectToNami }
-
-testnetGeroConfig :: ContractParams
-testnetGeroConfig = testnetConfig { walletSpec = Just ConnectToGero }
-
-testnetFlintConfig :: ContractParams
-testnetFlintConfig = testnetConfig { walletSpec = Just ConnectToFlint }
-
-testnetEternlConfig :: ContractParams
-testnetEternlConfig = testnetConfig { walletSpec = Just ConnectToEternl }
-
-testnetLodeConfig :: ContractParams
-testnetLodeConfig = testnetConfig { walletSpec = Just ConnectToLode }
-
-testnetNuFiConfig :: ContractParams
-testnetNuFiConfig = testnetConfig { walletSpec = Just ConnectToNuFi }
-
-mainnetConfig :: ContractParams
-mainnetConfig = testnetConfig { networkId = MainnetId }
-
-mainnetNamiConfig :: ContractParams
-mainnetNamiConfig = mainnetConfig { walletSpec = Just ConnectToNami }
-
-mainnetGeroConfig :: ContractParams
-mainnetGeroConfig = mainnetConfig { walletSpec = Just ConnectToGero }
-
-mainnetFlintConfig :: ContractParams
-mainnetFlintConfig = mainnetConfig { walletSpec = Just ConnectToFlint }
-
-mainnetEternlConfig :: ContractParams
-mainnetEternlConfig = mainnetConfig { walletSpec = Just ConnectToEternl }
-
-mainnetLodeConfig :: ContractParams
-mainnetLodeConfig = mainnetConfig { walletSpec = Just ConnectToLode }
-
-mainnetNuFiConfig :: ContractParams
-mainnetNuFiConfig = mainnetConfig { walletSpec = Just ConnectToNuFi }

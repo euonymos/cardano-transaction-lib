@@ -1,75 +1,65 @@
 {
   description = "cardano-transaction-lib";
 
-  nixConfig.bash-prompt = "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]CTL@\\[\\033[33m\\]$(git rev-parse --abbrev-ref HEAD) \\[\\e[0;32m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
+  nixConfig = {
+    extra-substituters = [ "https://plutonomicon.cachix.org" ];
+    extra-trusted-public-keys = [ "plutonomicon.cachix.org-1:evUxtNULjCjOipxwAnYhNFeF/lyYU1FeNGaVAnm+QQw=" ];
+    bash-prompt = "\\[\\e[0m\\][\\[\\e[0;2m\\]nix-develop \\[\\e[0;1m\\]CTL@\\[\\033[33m\\]$(git rev-parse --abbrev-ref HEAD) \\[\\e[0;32m\\]\\w\\[\\e[0m\\]]\\[\\e[0m\\]$ \\[\\e[0m\\]";
+  };
 
   inputs = {
-    nixpkgs.follows = "ogmios/nixpkgs";
+    nixpkgs.follows = "cardano-node/nixpkgs";
+    nixpkgs-arion.url = "github:NixOS/nixpkgs";
 
     flake-compat = {
       url = "github:edolstra/flake-compat";
       flake = false;
     };
 
-    ogmios.url = "github:mlabs-haskell/ogmios/a7687bc03b446bc74564abe1873fbabfa1aac196";
-    kupo-nixos.url = "github:mlabs-haskell/kupo-nixos/6f89cbcc359893a2aea14dd380f9a45e04c6aa67";
-    kupo-nixos.inputs.kupo.follows = "kupo";
-
-    kupo = {
-      url = "github:CardanoSolutions/kupo/v2.2.0";
-      flake = false;
-    };
-
-    # ogmios nixos module (remove and replace with the above after merging and updating)
-    ogmios-nixos.url = "github:mlabs-haskell/ogmios";
-
-    cardano-node.follows = "ogmios-nixos/cardano-node";
-    # for new environments like preview and preprod. TODO: remove this when cardano-node is updated
-    iohk-nix-environments.url = "github:input-output-hk/iohk-nix";
-    cardano-node.inputs.iohkNix.follows = "iohk-nix-environments";
+    cardano-node.url = "github:input-output-hk/cardano-node/10.1.4";
 
     # Repository with network parameters
+    # NOTE(bladyjoker): Cardano configurations (yaml/json) often change format and break, that's why we pin to a specific known version.
     cardano-configurations = {
-      # Override with "path:/path/to/cardano-configurations";
-      url = "github:input-output-hk/cardano-configurations";
-      flake = false;
-    };
-    easy-purescript-nix = {
-      url = "github:justinwoo/easy-purescript-nix/da7acb2662961fd355f0a01a25bd32bf33577fa8";
+      url = "github:input-output-hk/cardano-configurations?rev=a913d87246dc2484562a00c86e5f9c74a20e82ce";
       flake = false;
     };
 
-    # TODO use a tag for blockfrost as soon as they tag a recent commit (we need it as a flake)
-    blockfrost.url = "github:blockfrost/blockfrost-backend-ryo/49269a9adb27b370209a61de2f5407945112860a";
+    # Get Ogmios and Kupo from cardano-nix
+    cardano-nix = {
+      url = "github:mlabs-haskell/cardano.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Get Ogmios test fixtures
+    ogmios = {
+      url = "github:CardanoSolutions/ogmios/v6.8.0";
+      flake = false;
+    };
+
+    easy-purescript-nix = {
+      url = "github:justinwoo/easy-purescript-nix";
+      flake = false;
+    };
+
+    blockfrost.url = "github:blockfrost/blockfrost-backend-ryo/v1.7.0";
     db-sync.url = "github:input-output-hk/cardano-db-sync/13.1.0.0";
 
-    # Plutip server related inputs
-    plutip.url = "github:mlabs-haskell/plutip/89cf822c213f6a4278a88c8a8bb982696c649e76";
-    plutip-nixpkgs.follows = "plutip/nixpkgs";
-    haskell-nix.url = "github:mlabs-haskell/haskell.nix";
-    iohk-nix = {
-      follows = "plutip/iohk-nix";
-      flake = false;
-    };
-    CHaP = {
-      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
-      flake = false;
-    };
+    hercules-ci-effects.url = "github:hercules-ci/hercules-ci-effects";
   };
 
   outputs =
     { self
     , nixpkgs
+    , nixpkgs-arion
     , cardano-configurations
+    , cardano-node
     , ...
     }@inputs:
     let
-      supportedSystems = [
-        "x86_64-linux"
-        "x86_64-darwin"
-        "aarch64-linux"
-        "aarch64-darwin"
-      ];
+      linuxSystems = [ "x86_64-linux" "aarch64-linux" ];
+      darwinSystems = [ "x86_64-darwin" "aarch64-darwin" ];
+      supportedSystems = linuxSystems ++ darwinSystems;
 
       perSystem = nixpkgs.lib.genAttrs supportedSystems;
 
@@ -77,6 +67,7 @@
         overlays = nixpkgs.lib.attrValues self.overlays ++ [
           (_: _: {
             ogmios-fixtures = inputs.ogmios;
+            arion = (import nixpkgs-arion { inherit system; }).arion;
           })
         ];
         inherit system;
@@ -99,11 +90,20 @@
 
           function on_file () {
             local path=$1
-            local parent="$(basename "$(dirname "$path")")"
-            if command=$(pcregrep -o1 -o2 -o3 'Query\[(.*)\]|(EvaluateTx)|(SubmitTx)' <<< "$path")
+            match_A=$(pcregrep -o1 'QueryLedgerState([a-zA-Z]+)\/' <<< "$path")
+            match_B=$(pcregrep -o1 '([a-zA-Z]+)Response' <<< "$path")
+            command=""
+            if [ ! -z $match_A ]
+            then
+              command="QueryLedgerState-$match_A"
+            elif [ ! -z $match_B ]
+            then
+              command="$match_B"
+            fi
+            if [ ! -z $command ]
             then
               echo "$path"
-              json=$(jq -c .result "$path")
+              json=$(cat "$path")
               md5=($(md5sum <<< "$json"))
               printf "%s" "$json" > "ogmios/$command-$md5.json"
             fi
@@ -116,7 +116,7 @@
           cp -rT ogmios $out
         '';
 
-      psProjectFor = pkgs:
+      psProjectFor = pkgs: system:
         let
           projectName = "cardano-transaction-lib";
           # `filterSource` will still trigger rebuilds with flakes, even if a
@@ -137,17 +137,19 @@
             packageJson = ./package.json;
             packageLock = ./package-lock.json;
             shell = {
-              withRuntime = true;
+              withRuntime = system == "x86_64-linux";
               shellHook = exportOgmiosFixtures;
               packageLockOnly = true;
-              packages = with pkgs; [
-                arion
-                fd
-                nixpkgs-fmt
-                nodePackages.eslint
-                nodePackages.prettier
-                blockfrost-backend-ryo
-              ];
+              packages = with pkgs;
+                (if (builtins.elem system linuxSystems) then [ psmisc procps ] else [ ]) ++
+                [
+                  arion
+                  fd
+                  nixpkgs-fmt
+                  nodePackages.eslint
+                  nodePackages.prettier
+                  blockfrost-backend-ryo
+                ];
             };
           };
           exportOgmiosFixtures =
@@ -157,9 +159,14 @@
         in
         rec {
           packages = {
-            ctl-example-bundle-web = project.bundlePursProject {
+            ctl-purs-project = project.buildPursProject { };
+
+            ctl-example-bundle-web-esbuild = project.bundlePursProjectEsbuild {
               main = "Ctl.Examples.ByUrl";
-              entrypoint = "examples/index.js";
+            };
+
+            ctl-example-bundle-web-webpack = project.bundlePursProjectWebpack {
+              main = "Ctl.Examples.ByUrl";
             };
 
             ctl-runtime = pkgs.arion.build {
@@ -167,7 +174,7 @@
               modules = [ (buildCtlRuntime pkgs { }) ];
             };
 
-            docs = project.buildSearchablePursDocs {
+            docs = project.buildPursDocs {
               packageName = projectName;
             };
           };
@@ -175,18 +182,17 @@
           checks = {
             ctl-e2e-test = project.runE2ETest {
               name = "ctl-e2e-test";
-              testMain = "Test.Ctl.E2E";
-              env = { OGMIOS_FIXTURES = "${ogmiosFixtures}"; };
-              buildInputs = [ inputs.kupo-nixos.packages.${pkgs.system}.kupo ];
+              runnerMain = "Test.Ctl.E2E";
+              testMain = "Ctl.Examples.ByUrl";
+              buildInputs = [ inputs.cardano-nix.packages.${pkgs.system}.kupo ];
             };
-            ctl-plutip-test = project.runPlutipTest {
-              name = "ctl-plutip-test";
-              testMain = "Test.Ctl.Plutip";
-              env = { OGMIOS_FIXTURES = "${ogmiosFixtures}"; };
+            ctl-local-testnet-test = project.runLocalTestnetTest {
+              name = "ctl-local-testnet-test";
+              testMain = "Test.Ctl.Testnet";
             };
-            ctl-staking-test = project.runPlutipTest {
+            ctl-staking-test = project.runLocalTestnetTest {
               name = "ctl-staking-test";
-              testMain = "Test.Ctl.Plutip.Staking";
+              testMain = "Test.Ctl.Testnet.Staking";
             };
             ctl-unit-test = project.runPursTest {
               name = "ctl-unit-test";
@@ -197,28 +203,15 @@
 
           devShell = project.devShell;
 
-          apps = {
-            docs = project.launchSearchablePursDocs {
-              builtDocs = packages.docs;
-            };
-          };
-        };
+          nodeModules = project.nodeModules;
 
-      plutipServerFor = system:
-        let
-          pkgs = import inputs.plutip-nixpkgs {
-            inherit system;
-            overlays = [
-              inputs.haskell-nix.overlay
-              (import "${inputs.iohk-nix}/overlays/crypto")
-            ];
+          apps = {
+            # TODO: restore this
+            # https://github.com/Plutonomicon/cardano-transaction-lib/issues/1578
+            # docs = project.launchSearchablePursDocs {
+            #   builtDocs = packages.docs;
+            # };
           };
-        in
-        import ./plutip-server {
-          inherit pkgs;
-          inherit (inputs) plutip CHaP iohk-nix;
-          inherit (pkgs) system;
-          src = ./plutip-server;
         };
     in
     {
@@ -240,19 +233,19 @@
         spago = final: prev: {
           easy-ps = prev.easy-ps // {
             spago = prev.easy-ps.spago.overrideAttrs (_: rec {
-              version = "0.20.7";
+              version = "0.21.0";
               src =
                 if final.stdenv.isDarwin
                 then
                   final.fetchurl
                     {
                       url = "https://github.com/purescript/spago/releases/download/${version}/macOS.tar.gz";
-                      sha256 = "0s5zgz4kqglsavyh7h70zmn16vayg30alp42w3nx0zwaqkp79xla";
+                      sha256 = "19c0kdg7gk1c7v00lnkcsxidffab84d50d6l6vgrjy4i86ilhzd5";
                     }
                 else
                   final.fetchurl {
                     url = "https://github.com/purescript/spago/releases/download/${version}/Linux.tar.gz";
-                    sha256 = "0bh15dr1fg306kifqipnakv3rxab7hjfpcfzabw7vmg0gsfx8xka";
+                    sha256 = "1klczy04vwn5b39cnxflcqzap0d5kysp4dsw73i95xm5m7s37049";
                   };
             });
           };
@@ -264,10 +257,11 @@
                 inherit (prev) system;
               in
               {
-                plutip-server =
-                  (plutipServerFor system).hsPkgs.plutip-server.components.exes.plutip-server;
-                ogmios = ogmios.packages.${system}."ogmios:exe:ogmios";
-                kupo = inputs.kupo-nixos.packages.${system}.kupo;
+                ogmios = cardano-nix.packages.${system}.ogmios;
+                cardano-testnet = cardano-node.packages.${system}.cardano-testnet;
+                cardano-node = cardano-node.packages.${system}.cardano-node;
+                cardano-cli = cardano-node.packages.${system}.cardano-cli;
+                kupo = cardano-nix.packages.${system}.kupo;
                 cardano-db-sync = inputs.db-sync.packages.${system}.cardano-db-sync;
                 blockfrost-backend-ryo = inputs.blockfrost.packages.${system}.blockfrost-backend-ryo;
                 buildCtlRuntime = buildCtlRuntime final;
@@ -277,28 +271,21 @@
           );
       };
 
-      # flake from haskell.nix project
-      hsFlake = perSystem (system: (plutipServerFor system).flake { });
-
       devShells = perSystem (system: {
         # This is the default `devShell` and can be run without specifying
         # it (i.e. `nix develop`)
-        default = (psProjectFor (nixpkgsFor system)).devShell;
-
-        # This can be used with `nix develop .#hsDevShell
-        hsDevShell = self.hsFlake.${system}.devShell;
+        default = (psProjectFor (nixpkgsFor system) system).devShell;
       });
 
       packages = perSystem (system:
-        (psProjectFor (nixpkgsFor system)).packages
-        // ((plutipServerFor system).flake { }).packages
+        (psProjectFor (nixpkgsFor system) system).packages
       );
 
       apps = perSystem (system:
         let
           pkgs = nixpkgsFor system;
         in
-        (psProjectFor pkgs).apps // {
+        (psProjectFor pkgs system).apps // {
           ctl-runtime = pkgs.launchCtlRuntime { };
           ctl-runtime-blockfrost = pkgs.launchCtlRuntime { blockfrost.enable = true; };
           default = self.apps.${system}.ctl-runtime;
@@ -316,9 +303,9 @@
       checks = perSystem (system:
         let
           pkgs = nixpkgsFor system;
-
+          psProject = psProjectFor pkgs system;
         in
-        (psProjectFor pkgs).checks
+        psProject.checks
         // {
           formatting-check = pkgs.runCommand "formatting-check"
             {
@@ -331,7 +318,10 @@
               ];
             }
             ''
-              cd ${self}
+              cd $TMPDIR
+              ln -sfn ${psProject.nodeModules}/lib/node_modules node_modules
+              cp -r ${self}/* .
+
               make check-format
               touch $out
             '';
@@ -342,10 +332,12 @@
               nativeBuildInputs = [ pkgs.jq ];
             } ''
             cd ${self}
-            diff <(jq -S .dependencies <<< $ctlPackageJson) <(jq -S .dependencies <<< $ctlScaffoldPackageJson)
-            # We don't want to include `doctoc` in the template dev dependencies.
             diff \
-              <(jq -S '.devDependencies | del(.doctoc)' <<< $ctlPackageJson) \
+              <(jq -S .dependencies <<< $ctlPackageJson) \
+              <(jq -S .dependencies <<< $ctlScaffoldPackageJson)
+            # We don't want to include some dev dependencies.
+            diff \
+              <(jq -S '.devDependencies | del(.jssha) | del(.blakejs) | del(.doctoc) | del(.globals) | del(.["@eslint/js"])' <<< $ctlPackageJson) \
               <(jq -S .devDependencies <<< $ctlScaffoldPackageJson)
             touch $out
           '';
@@ -459,23 +451,35 @@
         };
       };
 
-      nixosConfigurations.test = nixpkgs.lib.nixosSystem {
+      nixosConfigurations.test = nixpkgs.lib.nixosSystem rec {
         system = "x86_64-linux";
         modules = [
           inputs.cardano-node.nixosModules.cardano-node
-          inputs.ogmios-nixos.nixosModules.ogmios
-          {
-            services.ogmios.package =
-              inputs.ogmios.packages.x86_64-linux."ogmios:exe:ogmios";
-          }
-          inputs.kupo-nixos.nixosModules.kupo
+          inputs.cardano-nix.nixosModules.ogmios
+          inputs.cardano-nix.nixosModules.kupo
           ./nix/test-nixos-configuration.nix
         ];
         specialArgs = {
           inherit (inputs) cardano-configurations;
+          ogmios = inputs.cardano-nix.packages.${system}.ogmios;
+          kupo = inputs.cardano-nix.packages.${system}.kupo;
         };
       };
 
-      herculesCI.ciSystems = [ "x86_64-linux" ];
+      herculesCI = inputs.hercules-ci-effects.lib.mkHerculesCI { inherit inputs; } {
+        hercules-ci.flake-update = {
+          enable = false;
+          updateBranch = "updated-flake-lock";
+          createPullRequest = true;
+          autoMergeMethod = null;
+          when = {
+            minute = 00;
+            hour = 12;
+            dayOfWeek = "Sun";
+          };
+        };
+
+        herculesCI.ciSystems = [ "x86_64-linux" ];
+      };
     };
 }

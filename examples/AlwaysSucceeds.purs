@@ -2,8 +2,7 @@
 -- | balance, and submit a smart-contract transaction. It creates a transaction
 -- | that pays two Ada to the `AlwaysSucceeds` script address.
 module Ctl.Examples.AlwaysSucceeds
-  ( alwaysSucceeds
-  , alwaysSucceedsScript
+  ( alwaysSucceedsScript
   , contract
   , example
   , main
@@ -13,40 +12,64 @@ module Ctl.Examples.AlwaysSucceeds
 
 import Contract.Prelude
 
-import Contract.Address (ownStakePubKeysHashes, scriptHashAddress)
-import Contract.Config (ContractParams, testnetNamiConfig)
-import Contract.Credential (Credential(PubKeyCredential))
+import Cardano.Transaction.Builder
+  ( DatumWitness(DatumValue)
+  , OutputWitness(PlutusScriptOutput)
+  , ScriptWitness(ScriptValue)
+  , TransactionBuilderStep(SpendOutput, Pay)
+  )
+import Cardano.Types
+  ( Credential(PubKeyHashCredential, ScriptHashCredential)
+  , PaymentCredential(PaymentCredential)
+  , PlutusScript
+  , ScriptHash
+  , StakeCredential(StakeCredential)
+  , TransactionHash
+  , TransactionOutput(TransactionOutput)
+  )
+import Cardano.Types.BigNum as BigNum
+import Cardano.Types.DataHash (hashPlutusData)
+import Cardano.Types.OutputDatum (OutputDatum(OutputDatumHash))
+import Cardano.Types.PlutusData as PlutusData
+import Cardano.Types.PlutusScript as Script
+import Cardano.Types.RedeemerDatum as RedeemerDatum
+import Cardano.Types.Transaction as Transaction
+import Cardano.Types.TransactionUnspentOutput (toUtxoMap)
+import Contract.Address (mkAddress)
+import Contract.Config
+  ( ContractParams
+  , KnownWallet(Nami)
+  , WalletSpec(ConnectToGenericCip30)
+  , testnetConfig
+  , walletName
+  )
 import Contract.Log (logInfo')
 import Contract.Monad (Contract, launchAff_, runContract)
-import Contract.PlutusData (PlutusData, unitDatum, unitRedeemer)
-import Contract.ScriptLookups as Lookups
-import Contract.Scripts (Validator(Validator), ValidatorHash, validatorHash)
-import Contract.TextEnvelope (decodeTextEnvelope, plutusScriptV1FromEnvelope)
+import Contract.TextEnvelope (decodeTextEnvelope, plutusScriptFromEnvelope)
 import Contract.Transaction
-  ( TransactionHash
-  , _input
-  , awaitTxConfirmed
+  ( awaitTxConfirmed
   , lookupTxHash
-  , submitTxFromConstraints
+  , submitTxFromBuildPlan
   )
-import Contract.TxConstraints (TxConstraints)
-import Contract.TxConstraints as Constraints
 import Contract.Utxos (utxosAt)
 import Contract.Value as Value
+import Contract.Wallet (ownStakePubKeyHashes)
 import Control.Monad.Error.Class (liftMaybe)
 import Data.Array (head)
-import Data.BigInt as BigInt
-import Data.Lens (view)
+import Data.Map as Map
 import Effect.Exception (error)
 
 main :: Effect Unit
-main = example testnetNamiConfig
+main = example $ testnetConfig
+  { walletSpec =
+      Just $ ConnectToGenericCip30 (walletName Nami) { cip95: false }
+  }
 
 contract :: Contract Unit
 contract = do
   logInfo' "Running Examples.AlwaysSucceeds"
   validator <- alwaysSucceedsScript
-  let vhash = validatorHash validator
+  let vhash = Script.hash validator
   logInfo' "Attempt to lock value"
   txId <- payToAlwaysSucceeds vhash
   awaitTxConfirmed txId
@@ -57,45 +80,34 @@ example :: ContractParams -> Effect Unit
 example cfg = launchAff_ do
   runContract cfg contract
 
-payToAlwaysSucceeds :: ValidatorHash -> Contract TransactionHash
+payToAlwaysSucceeds :: ScriptHash -> Contract TransactionHash
 payToAlwaysSucceeds vhash = do
   -- Send to own stake credential. This is used to test mustPayToScriptAddress.
-  mbStakeKeyHash <- join <<< head <$> ownStakePubKeysHashes
-  let
-    constraints :: TxConstraints Unit Unit
-    constraints =
-      case mbStakeKeyHash of
-        Nothing ->
-          Constraints.mustPayToScript vhash unitDatum
-            Constraints.DatumWitness
-            $ Value.lovelaceValueOf
-            $ BigInt.fromInt 2_000_000
-        Just stakeKeyHash ->
-          Constraints.mustPayToScriptAddress vhash
-            (PubKeyCredential $ unwrap stakeKeyHash)
-            unitDatum
-            Constraints.DatumWitness
-            $ Value.lovelaceValueOf
-            $ BigInt.fromInt 2_000_000
-
-    lookups :: Lookups.ScriptLookups PlutusData
-    lookups = mempty
-
-  submitTxFromConstraints lookups constraints
+  mbStakeKeyHash <- join <<< head <$> ownStakePubKeyHashes
+  scriptAddress <- mkAddress (PaymentCredential $ ScriptHashCredential vhash)
+    (StakeCredential <<< PubKeyHashCredential <<< unwrap <$> mbStakeKeyHash)
+  Transaction.hash <$> submitTxFromBuildPlan Map.empty mempty
+    [ Pay $ TransactionOutput
+        { address: scriptAddress
+        , amount: Value.lovelaceValueOf $ BigNum.fromInt 2_000_000
+        , datum: Just $ OutputDatumHash $ hashPlutusData PlutusData.unit
+        , scriptRef: Nothing
+        }
+    ]
 
 spendFromAlwaysSucceeds
-  :: ValidatorHash
-  -> Validator
+  :: ScriptHash
+  -> PlutusScript
   -> TransactionHash
   -> Contract Unit
 spendFromAlwaysSucceeds vhash validator txId = do
   -- Use own stake credential if available
-  mbStakeKeyHash <- join <<< head <$> ownStakePubKeysHashes
-  let
-    scriptAddress =
-      scriptHashAddress vhash (PubKeyCredential <<< unwrap <$> mbStakeKeyHash)
+  mbStakeKeyHash <- join <<< head <$> ownStakePubKeyHashes
+  scriptAddress <- mkAddress
+    (wrap $ ScriptHashCredential vhash)
+    (wrap <<< PubKeyHashCredential <<< unwrap <$> mbStakeKeyHash)
   utxos <- utxosAt scriptAddress
-  txInput <-
+  utxo <-
     liftM
       ( error
           ( "The id "
@@ -104,23 +116,24 @@ spendFromAlwaysSucceeds vhash validator txId = do
               <> show scriptAddress
           )
       )
-      (view _input <$> head (lookupTxHash txId utxos))
-  let
-    lookups :: Lookups.ScriptLookups PlutusData
-    lookups = Lookups.validator validator
-      <> Lookups.unspentOutputs utxos
-
-    constraints :: TxConstraints Unit Unit
-    constraints =
-      Constraints.mustSpendScriptOutput txInput unitRedeemer
-  spendTxId <- submitTxFromConstraints lookups constraints
-  awaitTxConfirmed spendTxId
+      $ head (lookupTxHash txId utxos)
+  spendTx <- submitTxFromBuildPlan (Map.union utxos $ toUtxoMap [ utxo ])
+    mempty
+    [ SpendOutput
+        utxo
+        ( Just $ PlutusScriptOutput (ScriptValue validator) RedeemerDatum.unit
+            $ Just
+            $ DatumValue
+            $ PlutusData.unit
+        )
+    ]
+  awaitTxConfirmed $ Transaction.hash spendTx
   logInfo' "Successfully spent locked values."
 
-foreign import alwaysSucceeds :: String
-
-alwaysSucceedsScript :: Contract Validator
-alwaysSucceedsScript =
+alwaysSucceedsScript :: Contract PlutusScript
+alwaysSucceedsScript = do
   liftMaybe (error "Error decoding alwaysSucceeds") do
     envelope <- decodeTextEnvelope alwaysSucceeds
-    Validator <$> plutusScriptV1FromEnvelope envelope
+    plutusScriptFromEnvelope envelope
+
+foreign import alwaysSucceeds :: String

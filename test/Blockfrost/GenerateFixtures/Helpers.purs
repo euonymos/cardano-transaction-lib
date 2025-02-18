@@ -19,19 +19,21 @@ import Contract.Config
   , blockfrostPublicPreviewServerConfig
   , testnetConfig
   )
-import Ctl.Internal.Contract.QueryBackend
+import Ctl.Internal.Contract.ProviderBackend
   ( BlockfrostBackend
   , defaultConfirmTxDelay
   , mkBlockfrostBackendParams
   )
-import Ctl.Internal.Hashing (md5HashHex)
+import Ctl.Internal.ServerConfig (blockfrostPublicSanchonetServerConfig)
 import Data.Maybe (Maybe(Just, Nothing), maybe)
 import Data.String (take) as String
 import Effect.Exception (throw)
 import Node.Encoding (Encoding(UTF8))
-import Node.FS.Aff (exists, writeTextFile)
+import Node.FS.Aff (writeTextFile)
+import Node.FS.Sync (exists)
 import Node.Path (concat)
 import Node.Process (lookupEnv)
+import Test.Ctl.Internal.Hashing (md5HashHex)
 
 blockfrostBackend :: Effect BlockfrostBackend
 blockfrostBackend = do
@@ -57,6 +59,7 @@ contractParams = do
           }
     , logLevel = Info
     , walletSpec = Just $ UseKeys (PrivatePaymentKeyFile skeyFilepath) Nothing
+        Nothing
     }
 
 blockfrostConfigFromApiKey :: String -> Effect ServerConfig
@@ -67,6 +70,8 @@ blockfrostConfigFromApiKey = String.take networkPrefixLength >>> case _ of
     pure blockfrostPublicPreviewServerConfig
   "preprod" ->
     pure blockfrostPublicPreprodServerConfig
+  "sanchon" ->
+    pure blockfrostPublicSanchonetServerConfig
   _ ->
     throw "Failed to derive server config from Blockfrost API key"
   where
@@ -90,7 +95,7 @@ storeBlockfrostFixture i query resp = do
   let
     filename = query <> "-" <> respHash <> ".json"
     fp = concat [ "fixtures", "test", "blockfrost", query, filename ]
-  exists fp >>= flip unless
+  liftEffect (exists fp) >>= flip unless
     ( writeTextFile UTF8 fp resp
         *> log ("Successfully saved fixture #" <> show i <> " to: " <> fp)
     )

@@ -23,7 +23,7 @@ import Contract.PlutusData
   , class ToData
   , PlutusData(List, Integer)
   )
-import Data.BigInt (BigInt)
+import JS.BigInt (BigInt)
 
 newtype PRational = PRational R.Rational
 
@@ -58,4 +58,3 @@ denominator = unwrap >>> R.denominator
 
 recip :: PRational -> Maybe PRational
 recip = unwrap >>> R.recip >>> map wrap
-

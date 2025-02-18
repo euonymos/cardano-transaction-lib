@@ -16,12 +16,15 @@ module Ctl.Internal.Contract.Monad
   , buildBackend
   , getLedgerConstants
   , filterLockedUtxos
-  , getQueryHandle
-  , mkQueryHandle
+  , getProvider
+  , mkProvider
   ) where
 
 import Prelude
 
+import Cardano.Provider.Error (ClientError)
+import Cardano.Provider.Type (Provider)
+import Cardano.Types (NetworkId(TestnetId, MainnetId), TransactionHash, UtxoMap)
 import Contract.Prelude (liftEither)
 import Control.Alt (class Alt)
 import Control.Alternative (class Alternative)
@@ -36,66 +39,54 @@ import Control.Monad.Reader.Trans (ReaderT, runReaderT, withReaderT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Parallel (class Parallel, parallel, sequential)
 import Control.Plus (class Plus)
-import Ctl.Internal.Cardano.Types.Transaction (UtxoMap)
 import Ctl.Internal.Contract.Hooks (Hooks)
 import Ctl.Internal.Contract.LogParams (LogParams)
-import Ctl.Internal.Contract.QueryBackend
+import Ctl.Internal.Contract.Provider
+  ( providerForBlockfrostBackend
+  , providerForCtlBackend
+  , providerForSelfHostedBlockfrostBackend
+  )
+import Ctl.Internal.Contract.ProviderBackend
   ( CtlBackend
   , CtlBackendParams
-  , QueryBackend(BlockfrostBackend, CtlBackend)
-  , QueryBackendParams(BlockfrostBackendParams, CtlBackendParams)
+  , ProviderBackend(BlockfrostBackend, CtlBackend)
+  , ProviderBackendParams(BlockfrostBackendParams, CtlBackendParams)
   , getCtlBackend
   )
-import Ctl.Internal.Contract.QueryHandle
-  ( queryHandleForBlockfrostBackend
-  , queryHandleForCtlBackend
-  , queryHandleForSelfHostedBlockfrostBackend
-  )
-import Ctl.Internal.Contract.QueryHandle.Type (QueryHandle)
 import Ctl.Internal.Helpers (filterMapWithKeyM, liftM, logWithLevel)
-import Ctl.Internal.JsWebSocket (_wsClose, _wsFinalize)
 import Ctl.Internal.Logging (Logger, mkLogger, setupLogs)
-import Ctl.Internal.QueryM
-  ( QueryEnv
-  , QueryM
-  , WebSocket
-  , getProtocolParametersAff
-  , getSystemStartAff
-  , mkOgmiosWebSocketAff
-  , underlyingWebSocket
+import Ctl.Internal.QueryM (QueryEnv, QueryM)
+import Ctl.Internal.QueryM.Ogmios (getProtocolParameters, getSystemStartTime)
+import Ctl.Internal.QueryM.Ogmios.Types
+  ( OgmiosDecodeError
+  , pprintOgmiosDecodeError
   )
-import Ctl.Internal.QueryM.Kupo (isTxConfirmedAff)
-import Ctl.Internal.Serialization.Address (NetworkId(TestnetId, MainnetId))
 import Ctl.Internal.Service.Blockfrost
   ( BlockfrostServiceM
   , runBlockfrostServiceM
   )
 import Ctl.Internal.Service.Blockfrost as Blockfrost
-import Ctl.Internal.Service.Error (ClientError)
 import Ctl.Internal.Types.ProtocolParameters (ProtocolParameters)
 import Ctl.Internal.Types.SystemStart (SystemStart)
-import Ctl.Internal.Types.Transaction (TransactionHash)
 import Ctl.Internal.Types.UsedTxOuts (UsedTxOuts, isTxOutRefUsed, newUsedTxOuts)
-import Ctl.Internal.Wallet (Wallet, actionBasedOnWallet)
+import Ctl.Internal.Wallet (Wallet(GenericCip30))
 import Ctl.Internal.Wallet.Spec (WalletSpec, mkWalletBySpec)
 import Data.Bifunctor (lmap)
-import Data.Either (Either(Left, Right), isRight)
+import Data.Either (Either(Right, Left))
 import Data.Log.Level (LogLevel)
 import Data.Log.Message (Message)
 import Data.Maybe (Maybe(Just, Nothing), fromMaybe)
-import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Newtype (class Newtype, unwrap)
 import Data.Set (Set)
 import Data.Set as Set
 import Data.Time.Duration (Milliseconds, Seconds)
-import Data.Traversable (for_, traverse, traverse_)
-import Effect (Effect)
+import Data.Traversable (for_, traverse)
 import Effect.Aff (Aff, ParAff, attempt, error, finally, supervise)
-import Effect.Aff.Class (liftAff)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Exception (Error, throw, try)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
-import MedeaPrelude (class MonadAff)
 import Record.Builder (build, merge)
 
 --------------------------------------------------------------------------------
@@ -186,11 +177,10 @@ type LedgerConstants =
 -- | to run. It is recommended to use one environment per application to save
 -- | on websocket connections and to keep track of `UsedTxOuts`.
 type ContractEnv =
-  { backend :: QueryBackend
-  , handle :: QueryHandle
+  { backend :: ProviderBackend
+  , provider :: Provider
   , networkId :: NetworkId
   , logLevel :: LogLevel
-  , walletSpec :: Maybe WalletSpec
   , customLogger :: Maybe (LogLevel -> Message -> Aff Unit)
   , suppressLogs :: Boolean
   , hooks :: Hooks
@@ -204,19 +194,19 @@ type ContractEnv =
       }
   }
 
-getQueryHandle :: Contract QueryHandle
-getQueryHandle = asks _.handle
+getProvider :: Contract Provider
+getProvider = asks _.provider
 
-mkQueryHandle
-  :: forall (rest :: Row Type). LogParams rest -> QueryBackend -> QueryHandle
-mkQueryHandle params queryBackend =
-  case queryBackend of
+mkProvider
+  :: forall (rest :: Row Type). LogParams rest -> ProviderBackend -> Provider
+mkProvider params providerBackend =
+  case providerBackend of
     CtlBackend ctlBackend _ ->
-      queryHandleForCtlBackend runQueryM params ctlBackend
+      providerForCtlBackend runQueryM params ctlBackend
     BlockfrostBackend blockfrostBackend Nothing -> do
-      queryHandleForBlockfrostBackend params blockfrostBackend
+      providerForBlockfrostBackend params blockfrostBackend
     BlockfrostBackend blockfrostBackend (Just ctlBackend) -> do
-      queryHandleForSelfHostedBlockfrostBackend params blockfrostBackend
+      providerForSelfHostedBlockfrostBackend params blockfrostBackend
         runQueryM
         ctlBackend
 
@@ -237,7 +227,7 @@ mkContractEnv params = do
       backend <- buildBackend logger params.backendParams
       ledgerConstants <- getLedgerConstants params backend
       pure $ merge
-        { backend, ledgerConstants, handle: mkQueryHandle params backend }
+        { backend, ledgerConstants, provider: mkProvider params backend }
     b2 <- parallel do
       wallet <- buildWallet
       pure $ merge { wallet }
@@ -260,14 +250,13 @@ mkContractEnv params = do
   constants =
     { networkId: params.networkId
     , logLevel: params.logLevel
-    , walletSpec: params.walletSpec
     , customLogger: params.customLogger
     , suppressLogs: params.suppressLogs
     , hooks: params.hooks
     }
 
-buildBackend :: Logger -> QueryBackendParams -> Aff QueryBackend
-buildBackend logger = case _ of
+buildBackend :: Logger -> ProviderBackendParams -> Aff ProviderBackend
+buildBackend _ = case _ of
   CtlBackendParams ctlParams blockfrostParams ->
     flip CtlBackend blockfrostParams <$> buildCtlBackend ctlParams
   BlockfrostBackendParams blockfrostParams ctlParams ->
@@ -275,13 +264,8 @@ buildBackend logger = case _ of
   where
   buildCtlBackend :: CtlBackendParams -> Aff CtlBackend
   buildCtlBackend { ogmiosConfig, kupoConfig } = do
-    let isTxConfirmed = map isRight <<< isTxConfirmedAff kupoConfig <<< wrap
-    ogmiosWs <- mkOgmiosWebSocketAff isTxConfirmed logger ogmiosConfig
     pure
-      { ogmios:
-          { config: ogmiosConfig
-          , ws: ogmiosWs
-          }
+      { ogmiosConfig
       , kupoConfig
       }
 
@@ -292,13 +276,35 @@ getLedgerConstants
      , customLogger :: Maybe (LogLevel -> Message -> Aff Unit)
      | r
      }
-  -> QueryBackend
+  -> ProviderBackend
   -> Aff LedgerConstants
 getLedgerConstants params = case _ of
-  CtlBackend { ogmios: { ws } } _ ->
-    { pparams: _, systemStart: _ }
-      <$> (unwrap <$> getProtocolParametersAff ws logger)
-      <*> getSystemStartAff ws logger
+  CtlBackend ctlBackend _ -> do
+    let
+      logParams =
+        { logLevel: params.logLevel
+        , customLogger: params.customLogger
+        , suppressLogs: true
+        }
+    pparams <- unwrap <$>
+      ( runQueryM logParams ctlBackend getProtocolParameters >>=
+          throwOnLeft
+      )
+    systemStart <- unwrap <$>
+      ( runQueryM logParams ctlBackend getSystemStartTime >>=
+          throwOnLeft
+      )
+    pure { pparams, systemStart }
+
+    where
+    throwOnLeft
+      :: forall a
+       . Either OgmiosDecodeError a
+      -> Aff a
+    throwOnLeft = case _ of
+      Left err -> throwError $ error $ pprintOgmiosDecodeError err
+      Right x -> pure x
+
   BlockfrostBackend backend _ ->
     runBlockfrostServiceM blockfrostLogger backend $
       { pparams: _, systemStart: _ }
@@ -311,20 +317,19 @@ getLedgerConstants params = case _ of
     -> BlockfrostServiceM a
   withErrorOnLeft = (=<<) (lmap (show >>> error) >>> liftEither)
 
-  logger :: Logger
-  logger = mkLogger params.logLevel params.customLogger
-
   -- TODO: Should we respect `suppressLogs` here?
   blockfrostLogger :: Message -> Aff Unit
   blockfrostLogger = fromMaybe logWithLevel params.customLogger params.logLevel
 
 -- | Ensure that `NetworkId` from wallet is the same as specified in the
 -- | `ContractEnv`.
+-- todo: reimplement uniformly
 walletNetworkCheck :: NetworkId -> Wallet -> Aff Unit
 walletNetworkCheck envNetworkId =
-  actionBasedOnWallet
-    (\w -> check <=< intToNetworkId <=< _.getNetworkId w)
-    (pure $ pure unit)
+  case _ of
+    GenericCip30 wallet -> do
+      check =<< intToNetworkId =<< wallet.getNetworkId
+    _ -> pure unit
   where
   check :: NetworkId -> Aff Unit
   check networkId = unless (envNetworkId == networkId) do
@@ -345,15 +350,7 @@ walletNetworkCheck envNetworkId =
 -- | Finalizes a `Contract` environment.
 -- | Closes the connections in `ContractEnv`, effectively making it unusable.
 stopContractEnv :: ContractEnv -> Aff Unit
-stopContractEnv { backend } =
-  liftEffect $ traverse_ stopCtlRuntime (getCtlBackend backend)
-  where
-  stopCtlRuntime :: CtlBackend -> Effect Unit
-  stopCtlRuntime { ogmios } =
-    stopWebSocket ogmios.ws
-
-  stopWebSocket :: forall (a :: Type). WebSocket a -> Effect Unit
-  stopWebSocket = ((*>) <$> _wsFinalize <*> _wsClose) <<< underlyingWebSocket
+stopContractEnv _ = pure unit
 
 -- | Constructs and finalizes a contract environment that is usable inside a
 -- | bracket callback.
@@ -423,7 +420,7 @@ type ContractSynchronizationParams =
 -- | `ContractEnv` environment, or use `withContractEnv` if your application
 -- | contains multiple contracts that can reuse the same environment.
 type ContractParams =
-  { backendParams :: QueryBackendParams
+  { backendParams :: ProviderBackendParams
   , networkId :: NetworkId
   , logLevel :: LogLevel
   , walletSpec :: Maybe WalletSpec
@@ -461,13 +458,11 @@ mkQueryEnv
   :: forall (rest :: Row Type). LogParams rest -> CtlBackend -> QueryEnv
 mkQueryEnv params ctlBackend =
   { config:
-      { kupoConfig: ctlBackend.kupoConfig
+      { ogmiosConfig: ctlBackend.ogmiosConfig
+      , kupoConfig: ctlBackend.kupoConfig
       , logLevel: params.logLevel
       , customLogger: params.customLogger
       , suppressLogs: params.suppressLogs
-      }
-  , runtime:
-      { ogmiosWs: ctlBackend.ogmios.ws
       }
   }
 
@@ -483,3 +478,4 @@ filterLockedUtxos utxos =
 
 withTxRefsCache :: forall (a :: Type). ReaderT UsedTxOuts Aff a -> Contract a
 withTxRefsCache = Contract <<< withReaderT _.usedTxOuts
+

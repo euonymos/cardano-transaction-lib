@@ -16,11 +16,6 @@ This guide will help you get started writing contracts with CTL. Please also see
 - [Executing contracts and the `ContractEnv`](#executing-contracts-and-the-contractenv)
   - [Making the `ContractEnv`](#making-the-contractenv)
 - [Building and submitting transactions](#building-and-submitting-transactions)
-  - [Using compiled scripts](#using-compiled-scripts)
-- [Testing](#testing)
-  - [Without a light wallet](#without-a-light-wallet)
-  - [With a light wallet](#with-a-light-wallet)
-  - [Plutip integration](#plutip-integration)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -38,6 +33,8 @@ Then, add `https://public-plutonomicon.cachix.org` and `public-plutonomicon.cach
 
 The easiest way to create a new CTL project is to use our `ctl-scaffold` flake template. This lives in the CTL repo -- you can have a look [here](../templates/ctl-scaffold). It contains a simple, yet complete, flakes-based scaffolding project with example `outputs` for a CTL project, including its runtime.
 
+Alternatively, consider [the-plutus-scaffold](https://github.com/mlabs-haskell/the-plutus-scaffold) flake template. It's a scaffold built on top of the above mentioned `ctl-scaffold`, but includes a react based frontend and a haskell onchain additionaly. It's more of a demo application, than a minimal working example.
+
 A new project can be initialized as follows:
 
 ```
@@ -54,7 +51,7 @@ You can learn more about using CTL as a dependency [here](./ctl-as-dependency.md
 
 ### Other prerequisites
 
-You will also need to become familiar with [CTL's runtime](./runtime.md) as its runtime services are required for executing virtually all contracts.
+You will also need to become familiar with [CTL's runtime](./runtime.md) as its runtime services are required for executing virtually all contracts. If you want to avoid manual backend setup, use [blockfrost.io](./blockfrost.md).
 
 ## Importing CTL modules
 
@@ -138,9 +135,13 @@ main = Contract.Monad.launchAff_ do -- we re-export this for you
         , kupoConfig: defaultKupoServerConfig
         }
       , networkId: TestnetId
-      , logLevel: Trace
       , walletSpec: Just ConnectToNami
+      , logLevel: Trace
       , customLogger: Nothing
+      , suppressLogs: false
+      , hooks: emptyHooks
+      , timeParams: defaultTimeParams
+      , synchronizationParams: defaultSynchronizationParams
       }
   runContract config someContract
 
@@ -165,49 +166,49 @@ customOgmiosWsConfig =
 
 Unlike PAB, CTL obscures less of the build-balance-sign-submit pipeline for transactions and most of the steps are called individually. The general workflow in CTL is similar to the following:
 
-- Build a transaction using `Contract.ScriptLookups`, `Contract.TxConstraints` and `Contract.BalanceTxConstraints` (it is also possible to directly build a `Transaction` if you require even greater low-level control over the process, although we recommend the constraints/lookups approach for most users):
+- Build a transaction using [`cardano-transaction-builder`](https://github.com/mlabs-haskell/purescript-cardano-transaction-builder):
 
   ```purescript
   contract = do
     let
-      constraints :: TxConstraints Unit Unit
-      constraints =
-        TxConstraints.mustPayToScript vhash unitDatum
-          (Value.lovelaceValueOf $ BigInt.fromInt 2_000_000)
+      plan =
+        [ Pay $ TransactionOutput
+          { address: address
+          , amount: Value.lovelaceValueOf $ BigNum.fromInt 1_000_000
+          , datum: Just $ OutputDatumHash $ hashPlutusData PlutusData.unit
+          , scriptRef: Nothing
+          }
+        ]
+    unbalancedTx <- buildTx plan
+    ...
+  ```
 
-      lookups :: ScriptLookups PlutusData
-      lookups = ScriptLookups.validator validator
-
+- Balance it using `Contract.Transaction.balanceTx`, and then sign it using `signTransaction`:
+  ```purescript
+  contract = do
+    ...
+    let
       balanceTxConstraints :: BalanceTxConstraints.BalanceTxConstraintsBuilder
       balanceTxConstraints =
         BalanceTxConstraints.mustUseUtxosAtAddress address
           <> BalanceTxConstraints.mustSendChangeToAddress address
           <> BalanceTxConstraints.mustNotSpendUtxoWithOutRef nonSpendableOref
-
-    -- `liftedE` will throw a runtime exception on `Left`s
-    unbalancedTx <- liftedE $ Lookups.mkUnbalancedTx lookups constraints
-    ...
-  ```
-
-- Balance it using `Contract.Transaction.balanceTx` (or `Contract.Transaction.balanceTxWithConstraints` if you need to adjust the balancer behaviour) and then sign it using `signTransaction`:
-  ```purescript
-  contract = do
-    ...
     -- `liftedE` will throw a runtime exception on `Left`s
     balancedTx <-
-      liftedE $ balanceTxWithConstraints unbalancedTx balanceTxConstraints
+      balanceTx unbalancedTx usedUtxos balanceTxConstraints
     balancedSignedTx <- signTransaction balancedTx
     ...
   ```
 
-- Submit using `Contract.Transaction.submit`:
+- Submit using `Contract.Transaction.submit` and await for confirmation using `awaitTxConfirmed`:
 
   ```purescript
   contract = do
     ...
     txId <- submit balancedSignedTx
+    awaitTxConfirmed txId
     logInfo' $ "Tx ID: " <> show txId
-  ```
+```
 
 ### Using compiled scripts
 
@@ -217,20 +218,14 @@ You can import your scripts to use with CTL. See [importing-scripts](./importing
 
 ### Without a light wallet
 
-We provide `KeyWallet` to enable testing outside of the browser, or in-browser without a light wallet installed. To generate a key, you can use `cardano-cli` as follows:
+We provide `KeyWallet` to enable testing outside of the browser, or in-browser without a light wallet installed.
 
-```shell
-$ cardano-cli address key-gen --normal-key --signing-key-file payment.skey --verification-key-file payment.vkey
-```
-
-The signing key can be loaded to CTL using `WalletSpec`'s `UseKeys` constructor. See [`examples/KeyWallet/Internal/Pkh2PkhContract.purs`](../examples/KeyWallet/Internal/Pkh2PkhContract.purs#L49).
-
-From here you can submit transactions that will be signed with your private key, or perhaps export transactions to be tested with external tools such as [`plutip` testing tool](https://github.com/mlabs-haskell/plutip).
+See [here](./key-management.md)
 
 ### With a light wallet
 
 For full testing with browser-based light wallets see [E2E Testing in the Browser](./e2e-testing.md).
 
-### Plutip integration
+### Cardano Testnet integration
 
-Plutip is a tool for testing contracts on a local testnet. See [CTL integration with Plutip](./plutip-testing.md).
+See [CTL integration with Cardano Testnet](./cardano-testnet-testing.md).

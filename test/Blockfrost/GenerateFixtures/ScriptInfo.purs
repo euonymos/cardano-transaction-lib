@@ -2,7 +2,7 @@ module Test.Ctl.Blockfrost.GenerateFixtures.ScriptInfo (main) where
 
 import Contract.Prelude
 
-import Contract.Address (ownPaymentPubKeyHash, ownStakePubKeyHash)
+import Cardano.Types.BigNum as BigNum
 import Contract.Config
   ( ContractParams
   , PrivatePaymentKeySource(PrivatePaymentKeyFile)
@@ -24,6 +24,7 @@ import Contract.Transaction
 import Contract.TxConstraints (TxConstraints) as Constraints
 import Contract.Value (Value)
 import Contract.Value (lovelaceValueOf) as Value
+import Contract.Wallet (ownPaymentPubKeyHash, ownStakePubKeyHash)
 import Ctl.Examples.AlwaysSucceeds (alwaysSucceedsScript)
 import Ctl.Examples.Helpers (mustPayToPubKeyStakeAddressWithScriptRef)
 import Ctl.Examples.PlutusV2.Scripts.AlwaysSucceeds (alwaysSucceedsScriptV2)
@@ -35,7 +36,6 @@ import Ctl.Internal.Service.Blockfrost
   )
 import Ctl.Internal.Service.Blockfrost (getScriptInfo) as Blockfrost
 import Data.Array (zip) as Array
-import Data.BigInt (fromInt) as BigInt
 import Data.FoldableWithIndex (forWithIndex_)
 import Data.UInt (fromInt) as UInt
 import Test.Ctl.Blockfrost.GenerateFixtures.Helpers
@@ -72,7 +72,7 @@ main =
             }
       , logLevel = Info
       , walletSpec =
-          Just $ UseKeys (PrivatePaymentKeyFile skeyFilepath) Nothing
+          Just $ UseKeys (PrivatePaymentKeyFile skeyFilepath) Nothing Nothing
       }
 
 generateFixtures :: Contract Unit
@@ -81,8 +81,8 @@ generateFixtures = do
   backend <- liftEffect blockfrostBackend
 
   nativeScriptRef <- liftEffect (NativeScriptRef <$> randomSampleOne arbitrary)
-  v1PlutusScriptRef <- PlutusScriptRef <$> unwrap <$> alwaysSucceedsScript
-  v2PlutusScriptRef <- PlutusScriptRef <$> unwrap <$> alwaysSucceedsScriptV2
+  v1PlutusScriptRef <- PlutusScriptRef <$> alwaysSucceedsScript
+  v2PlutusScriptRef <- PlutusScriptRef <$> alwaysSucceedsScriptV2
 
   let
     scriptRefs = [ nativeScriptRef, v1PlutusScriptRef, v2PlutusScriptRef ]
@@ -94,14 +94,14 @@ generateFixtures = do
   skh <- ownStakePubKeyHash
   let
     value :: Value
-    value = Value.lovelaceValueOf $ BigInt.fromInt 2_000_000
+    value = Value.lovelaceValueOf $ BigNum.fromInt 2_000_000
 
-    constraints :: Constraints.TxConstraints Void Void
+    constraints :: Constraints.TxConstraints
     constraints =
       mconcat $ scriptRefs <#>
         flip (mustPayToPubKeyStakeAddressWithScriptRef pkh skh) value
 
-    lookups :: Lookups.ScriptLookups Void
+    lookups :: Lookups.ScriptLookups
     lookups = mempty
 
   txHash <- submitTxFromConstraints lookups constraints
@@ -126,4 +126,3 @@ generateFixtures = do
       ScriptInfo h | h == scriptHash ->
         storeBlockfrostFixture i "getScriptInfo" rawResponse
       _ -> pure unit
-

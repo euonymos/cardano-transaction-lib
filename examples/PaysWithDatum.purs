@@ -8,19 +8,21 @@ module Ctl.Examples.PaysWithDatum (contract, example, main) where
 
 import Contract.Prelude
 
-import Contract.Address
-  ( Address
-  , getWalletAddresses
-  , ownPaymentPubKeysHashes
-  , ownStakePubKeysHashes
+import Cardano.Types (TransactionOutput)
+import Cardano.Types.BigNum as BigNum
+import Contract.Address (Address)
+import Contract.Config
+  ( ContractParams
+  , KnownWallet(Nami)
+  , WalletSpec(ConnectToGenericCip30)
+  , testnetConfig
+  , walletName
   )
-import Contract.Config (ContractParams, testnetNamiConfig)
 import Contract.Hashing (datumHash)
 import Contract.Log (logInfo')
 import Contract.Monad (Contract, launchAff_, liftedM, runContract)
 import Contract.PlutusData
   ( DataHash
-  , Datum(Datum)
   , OutputDatum(OutputDatum, OutputDatumHash)
   , PlutusData(Integer)
   )
@@ -36,7 +38,6 @@ import Contract.Test.Assert
   )
 import Contract.Transaction
   ( TransactionHash
-  , TransactionOutputWithRefScript
   , awaitTxConfirmed
   , submitTxFromConstraints
   )
@@ -44,20 +45,28 @@ import Contract.TxConstraints (DatumPresence(DatumInline, DatumWitness))
 import Contract.TxConstraints as Constraints
 import Contract.Value (Value)
 import Contract.Value (lovelaceValueOf) as Value
+import Contract.Wallet
+  ( getWalletAddresses
+  , ownPaymentPubKeyHashes
+  , ownStakePubKeyHashes
+  )
 import Control.Monad.Trans.Class (lift)
 import Ctl.Examples.Helpers (mustPayToPubKeyStakeAddressWithDatum)
 import Data.Array (head)
-import Data.BigInt (fromInt) as BigInt
+import JS.BigInt (fromInt) as BigInt
 
 type ContractResult =
   { address :: Address
   , txHash :: TransactionHash
-  , datum :: Datum
+  , datum :: PlutusData
   , datumHash :: DataHash
   }
 
 main :: Effect Unit
-main = example testnetNamiConfig
+main = example $ testnetConfig
+  { walletSpec =
+      Just $ ConnectToGenericCip30 (walletName Nami) { cip95: false }
+  }
 
 example :: ContractParams -> Effect Unit
 example = launchAff_ <<< flip runContract contract
@@ -66,23 +75,23 @@ contract :: Contract Unit
 contract = do
   logInfo' "Running Examples.PaysWithDatum"
 
-  pkh <- liftedM "Could not get own PKH" (head <$> ownPaymentPubKeysHashes)
-  skh <- join <<< head <$> ownStakePubKeysHashes
+  pkh <- liftedM "Could not get own PKH" (head <$> ownPaymentPubKeyHashes)
+  skh <- join <<< head <$> ownStakePubKeyHashes
   address <- liftedM "Could not get own address" (head <$> getWalletAddresses)
 
   let
-    datum = Datum $ Integer $ BigInt.fromInt 42
+    datum = Integer $ BigInt.fromInt 42
     datumHash' = datumHash datum
 
     value :: Value
-    value = Value.lovelaceValueOf (BigInt.fromInt 2_000_000)
+    value = Value.lovelaceValueOf (BigNum.fromInt 2_000_000)
 
-    constraints :: Constraints.TxConstraints Void Void
+    constraints :: Constraints.TxConstraints
     constraints =
       mustPayToPubKeyStakeAddressWithDatum pkh skh datum DatumWitness value
         <> mustPayToPubKeyStakeAddressWithDatum pkh skh datum DatumInline value
 
-    lookups :: Lookups.ScriptLookups Void
+    lookups :: Lookups.ScriptLookups
     lookups = mempty
 
   void $ runChecks checks $ lift do
@@ -124,6 +133,6 @@ assertTxCreatesOutputWithDatumHash = assertionToCheck
           hasOutputWithOutputDatum (OutputDatumHash datumHash) outputs
 
 hasOutputWithOutputDatum
-  :: OutputDatum -> Array TransactionOutputWithRefScript -> Boolean
+  :: OutputDatum -> Array TransactionOutput -> Boolean
 hasOutputWithOutputDatum datum =
-  any (eq datum <<< _.datum <<< unwrap <<< _.output <<< unwrap)
+  any (eq (Just datum) <<< _.datum <<< unwrap)

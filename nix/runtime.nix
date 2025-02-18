@@ -3,6 +3,8 @@ rec {
   defaultConfig = final: with final; {
     inherit (inputs) cardano-configurations;
     # { name = "preprod"; magic = 1; }
+    # { name = "preview"; magic = 2; }
+    # { name = "sanchonet"; magic = 4; }
     # { name = "mainnet"; magic = null; }
     # See `doc/development.md` and `doc/runtime.md#changing-network-configurations`
     # for info on how to switch networks.
@@ -15,9 +17,6 @@ rec {
     # to change the values after calling `buildCtlRuntime`
     node = {
       port = 3001;
-      # the version of the node to use, corresponds to the image version tag,
-      # i.e. `"inputoutput/cardano-node:${tag}"`
-      tag = "1.35.4";
     };
     ogmios = { port = 1337; };
     postgres = {
@@ -30,7 +29,6 @@ rec {
       port = 1442;
       since = "origin";
       match = "*/*"; # matches Shelley addresses only
-      tag = "v2.2.0";
       deferDbIndexes = true; # whether to pass --defer-db-indexes
       pruneUtxo = true; # whether to pass --prune-utxo
       # TODO: Do we want to support connection through ogmios?
@@ -98,10 +96,15 @@ rec {
       nodeSocketPath = "/ipc/node.socket";
       bindPort = port: "${toString port}:${toString port}";
       defaultServices = with config; {
-        # TODO make this use `cardano-node` from flake inputs
         cardano-node = {
+          image.contents = [
+            # Note: Required, fixes issue with "Failed to start all.. subscriptions".
+            #   Creates the /etc/services file.
+            pkgs.iana-etc
+            pkgs.coreutils
+          ];
           service = {
-            image = "inputoutput/cardano-node:${node.tag}";
+            useHostStore = true;
             ports = [ (bindPort node.port) ];
             volumes = [
               "${config.cardano-configurations}/network/${config.network.name}/cardano-node:/config"
@@ -110,22 +113,21 @@ rec {
               "${nodeIpcVol}:/ipc"
             ];
             command = [
-              "run"
-              "--config"
-              "/config/config.json"
-              "--database-path"
-              "/data/db"
-              "--socket-path"
-              "${nodeSocketPath}"
-              "--topology"
-              "/config/topology.json"
+              "${pkgs.bash}/bin/sh"
+              "-c"
+              ''
+                ${inputs.cardano-node.packages."${pkgs.system}".cardano-node}/bin/cardano-node run \
+                  --config /config/config.json \
+                  --database-path /data/db \
+                  --socket-path "${nodeSocketPath}" \
+                  --topology /config/topology.json
+              ''
             ];
           };
         };
-        # TODO make this use `kupo` from flake inputs
         kupo = {
           service = {
-            image = "cardanosolutions/kupo:${kupo.tag}";
+            useHostStore = true;
             ports = [ (bindPort kupo.port) ];
             volumes = [
               "${config.cardano-configurations}/network/${config.network.name}:/config"
@@ -133,26 +135,20 @@ rec {
               "${kupoDbVol}:/kupo-db"
             ];
             command = [
-              "--node-config"
-              "/config/cardano-node/config.json"
-              "--node-socket"
-              "${nodeSocketPath}"
-              "--since"
-              "${kupo.since}"
-              "--match"
-              "${"${kupo.match}"}"
-              "--host"
-              "0.0.0.0"
-              "--workdir"
-              "kupo-db"
-            ] ++ (
-              pkgs.lib.lists.optional kupo.pruneUtxo "--prune-utxo"
-            ) ++ (
-              pkgs.lib.lists.optional kupo.deferDbIndexes "--defer-db-indexes"
-            );
+              "${pkgs.bash}/bin/sh"
+              "-c"
+              ''
+                ${pkgs.kupo}/bin/kupo \
+                  --node-config /config/cardano-node/config.json \
+                  --node-socket "${nodeSocketPath}" \
+                  --since "${kupo.since}" \
+                  --match "${kupo.match}" \
+                  --host "0.0.0.0" \
+                  --workdir kupo-db ${pkgs.lib.strings.optionalString kupo.pruneUtxo "--prune-utxo"} ${pkgs.lib.strings.optionalString kupo.deferDbIndexes "--defer-db-indexes"}
+              ''
+            ];
           };
         };
-        # TODO make this use `ogmios` from flake inputs
         ogmios = {
           service = {
             useHostStore = true;
@@ -170,6 +166,7 @@ rec {
                   --port ${toString ogmios.port} \
                   --node-socket /ipc/node.socket \
                   --node-config /config/cardano-node/config.json
+                  --include-transaction-cbor
               ''
             ];
           };
@@ -245,18 +242,18 @@ rec {
       } else { });
     in
     {
-      docker-compose.raw = pkgs.lib.recursiveUpdate
-        {
-          volumes = {
-            "${nodeDbVol}" = { };
-            "${nodeIpcVol}" = { };
-            "${kupoDbVol}" = { };
-          } // (if config.blockfrost.enable then {
-            "${dbSyncStateVol}" = { };
-            "${dbSyncTmpVol}" = { };
-          } else { });
-        }
-        config.extraDockerCompose;
+      project.name = "ctl-runtime";
+      docker-compose = {
+        raw = config.extraDockerCompose;
+        volumes = {
+          "${nodeDbVol}" = { };
+          "${nodeIpcVol}" = { };
+          "${kupoDbVol}" = { };
+        } // pkgs.lib.optionalAttrs config.blockfrost.enable {
+          "${dbSyncStateVol}" = { };
+          "${dbSyncTmpVol}" = { };
+        };
+      };
       services = pkgs.lib.recursiveUpdate defaultServices config.extraServices;
     };
 
