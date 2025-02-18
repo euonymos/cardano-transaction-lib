@@ -132,10 +132,11 @@ handleAffjaxResponse
   -> Either ClientError result
 handleAffjaxResponse =
   handleAffjaxResponseGeneric
-    ClientHttpError
-    ( \statusCode body -> ClientHttpResponseError (wrap statusCode)
+    { httpError: ClientHttpError
+    , httpStatusCodeError: \statusCode body -> ClientHttpResponseError
+        (wrap statusCode)
         (ServiceOtherError body)
-    )
-    ClientDecodeJsonError
-    (decodeAeson <=< parseJsonStringToAeson)
-    pure
+    , decodeError: ClientDecodeJsonError
+    , parse: (decodeAeson <=< parseJsonStringToAeson)
+    , transform: pure
+    }

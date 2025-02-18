@@ -200,15 +200,18 @@ handleAffjaxOgmiosResponse
   -> Either OgmiosDecodeError result
 handleAffjaxOgmiosResponse =
   handleAffjaxResponseGeneric
-    ( \err -> ErrorResponse $ Just $ OgmiosError
-        { code: 0, message: printError err, data: Nothing }
-    )
-    ( \code body -> ErrorResponse $ Just $ OgmiosError
-        { code, message: "body: " <> body, data: Nothing }
-    )
-    (\_body jsonErr -> InvalidRpcResponse jsonErr)
-    parseJsonStringToAeson
-    decodeOgmios
+    { httpError:
+        ( \err -> ErrorResponse $ Just $ OgmiosError
+            { code: 0, message: printError err, data: Nothing }
+        )
+    , httpStatusCodeError:
+        ( \code body -> ErrorResponse $ Just $ OgmiosError
+            { code, message: "body: " <> body, data: Nothing }
+        )
+    , decodeError: (\_body jsonErr -> InvalidRpcResponse jsonErr)
+    , parse: parseJsonStringToAeson
+    , transform: decodeOgmios
+    }
 
 ogmiosErrorHandler
   :: forall a m
