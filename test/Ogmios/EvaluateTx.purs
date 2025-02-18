@@ -2,8 +2,6 @@ module Test.Ctl.Ogmios.EvaluateTx (suite) where
 
 import Prelude
 
-import Aeson (stringifyAeson)
-import Cardano.Provider.Error (ClientError(ClientDecodeJsonError))
 import Cardano.Provider.TxEvaluation
   ( ExecutionUnits
   , RedeemerPointer
@@ -15,10 +13,11 @@ import Cardano.Types (BigNum)
 import Cardano.Types.BigNum as BigNum
 import Cardano.Types.RedeemerTag (RedeemerTag(Spend, Cert, Reward))
 import Ctl.Internal.QueryM.Ogmios.Types
-  ( OgmiosDecodeError(ClientErrorResponse)
+  ( OgmiosDecodeError(InvalidRpcResponse)
   , OgmiosTxEvaluationR
   , decodeOgmios
   )
+import Data.Argonaut.Decode.Error (JsonDecodeError(TypeMismatch))
 import Data.Either (Either(Left, Right))
 import Data.Map as Map
 import Data.Maybe (fromJust)
@@ -59,13 +58,8 @@ suite = do
             (map (\(r :: OgmiosTxEvaluationR) -> unwrap r) <<< decodeOgmios)
               body
         txEvalR `shouldSatisfy` case _ of
-          Left
-            ( ClientErrorResponse
-                ( ClientDecodeJsonError
-                    bodyStr
-                    _
-                )
-            ) -> bodyStr == stringifyAeson body
+          Left (InvalidRpcResponse (TypeMismatch errMsg)) -> errMsg ==
+            "Expected redeemer to be one of: (spend|mint|publish|withdraw|vote|propose)"
           _ -> false
 
       test "Successfully decodes a failed execution response (Incompatible era)"

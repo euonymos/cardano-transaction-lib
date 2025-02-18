@@ -15,14 +15,11 @@ import Prelude
 import Aeson (class EncodeAeson, Aeson, parseJsonStringToAeson, stringifyAeson)
 import Aeson as Aeson
 import Affjax (Error, Response, defaultRequest) as Affjax
+import Affjax (printError)
 import Affjax.RequestBody as Affjax.RequestBody
 import Affjax.RequestHeader as Affjax.RequestHeader
 import Affjax.ResponseFormat (string) as Affjax.ResponseFormat
 import Affjax.StatusCode (StatusCode(StatusCode))
-import Cardano.Provider.Error
-  ( ClientError(ClientHttpError, ClientHttpResponseError, ClientDecodeJsonError)
-  , ServiceError(ServiceOtherError)
-  )
 import Cardano.Provider.TxEvaluation as Provider
 import Cardano.Types.CborBytes (CborBytes)
 import Cardano.Types.Chain as Chain
@@ -39,8 +36,9 @@ import Ctl.Internal.QueryM.Ogmios.Types
   , ChainTipQR(CtChainPoint, CtChainOrigin)
   , CurrentEpoch
   , DelegationsAndRewardsR
-  , OgmiosDecodeError(ClientErrorResponse)
+  , OgmiosDecodeError(ErrorResponse, InvalidRpcResponse)
   , OgmiosEraSummaries
+  , OgmiosError(OgmiosError)
   , OgmiosProtocolParameters
   , OgmiosSystemStart
   , OgmiosTxEvaluationR
@@ -55,7 +53,7 @@ import Data.ByteArray (byteArrayToHex)
 import Data.Either (Either(Left), either)
 import Data.HTTP.Method (Method(POST))
 import Data.Lens (_Right, to, (^?))
-import Data.Maybe (Maybe(Just))
+import Data.Maybe (Maybe(Just, Nothing))
 import Data.Newtype (unwrap, wrap)
 import Data.Time.Duration (Milliseconds(Milliseconds))
 import Data.Tuple.Nested (type (/\), (/\))
@@ -202,12 +200,13 @@ handleAffjaxOgmiosResponse
   -> Either OgmiosDecodeError result
 handleAffjaxOgmiosResponse =
   handleAffjaxResponseGeneric
-    (ClientErrorResponse <<< ClientHttpError)
-    ( \statusCode body -> ClientErrorResponse $ ClientHttpResponseError
-        (wrap statusCode)
-        (ServiceOtherError body)
+    ( \err -> ErrorResponse $ Just $ OgmiosError
+        { code: 0, message: printError err, data: Nothing }
     )
-    (\body -> ClientErrorResponse <<< ClientDecodeJsonError body)
+    ( \code body -> ErrorResponse $ Just $ OgmiosError
+        { code, message: "body: " <> body, data: Nothing }
+    )
+    (\_body jsonErr -> InvalidRpcResponse jsonErr)
     parseJsonStringToAeson
     decodeOgmios
 

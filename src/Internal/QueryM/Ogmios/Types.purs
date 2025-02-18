@@ -22,7 +22,7 @@ module Ctl.Internal.QueryM.Ogmios.Types
   , decodeOgmios
   , class DecodeOgmios
   , OgmiosDecodeError
-      ( ClientErrorResponse
+      ( InvalidRpcError
       , InvalidRpcResponse
       , ErrorResponse
       )
@@ -58,10 +58,6 @@ import Aeson
   , (.:?)
   )
 import Cardano.AsCbor (decodeCbor, encodeCbor)
-import Cardano.Provider.Error
-  ( ClientError(ClientDecodeJsonError)
-  , pprintClientError
-  )
 import Cardano.Provider.TxEvaluation
   ( ExecutionUnits
   , OgmiosTxOut
@@ -1009,9 +1005,9 @@ instance DecodeAeson OgmiosError where
 data OgmiosDecodeError
   -- Server responded with error.
   = ErrorResponse (Maybe OgmiosError)
-  -- Server responded with result, parsing of which failed
-  | ClientErrorResponse ClientError
-  -- Received JsonRpc2Response was not of the right format.
+  -- Received JsonRpc2 error was not of the right format.
+  | InvalidRpcError JsonDecodeError
+  -- Received JsonRpc2 response was not of the right format.
   | InvalidRpcResponse JsonDecodeError
 
 derive instance Generic OgmiosDecodeError _
@@ -1022,8 +1018,8 @@ instance Show OgmiosDecodeError where
 pprintOgmiosDecodeError :: OgmiosDecodeError -> String
 pprintOgmiosDecodeError (ErrorResponse err) = "Ogmios responded with error: " <>
   maybe "<Actually no response>" pprintOgmiosError err
-pprintOgmiosDecodeError (ClientErrorResponse err) =
-  "Ogmios responded with error: " <> pprintClientError err
+pprintOgmiosDecodeError (InvalidRpcError err) =
+  "Ogmios error was not of the right format: " <> printJsonDecodeError err
 pprintOgmiosDecodeError (InvalidRpcResponse err) =
   "Ogmios response was not of the right format: " <> printJsonDecodeError err
 
@@ -1053,15 +1049,13 @@ makeDecodeOgmios decoders aeson = do
     -- Expected result, got it
     Just (Right x) /\ _ -> pure x
     -- Expected result, got it in a wrong format
-    Just (Left err) /\ _ -> Left $ ClientErrorResponse $ ClientDecodeJsonError
-      (stringifyAeson aeson)
-      err
+    Just (Left err) /\ _ -> Left $ InvalidRpcResponse err
     -- Got an expected error
     _ /\ Just (Right x) -> pure x
     -- Got an unexpected error
     _ -> do
       err :: Maybe OgmiosError <- sequence $
-        lmap InvalidRpcResponse <<< decodeAeson <$> json.error
+        lmap InvalidRpcError <<< decodeAeson <$> json.error
       Left $ ErrorResponse err
 
 -- | Decode "result" field of ogmios response.
